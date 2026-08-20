@@ -23,9 +23,16 @@ REF_PERCENT = float(os.getenv("REF_PERCENT", "50"))
 
 # ---------------------------------------------------------------- payments
 # The bot's receiving wallet (imported by the owner via /importwallet or env).
+# Accepts: base58 private key, [64-byte array], OR a 12/24-word seed phrase.
 TREASURY_PRIVATE_KEY = os.getenv("TREASURY_PRIVATE_KEY", "").strip()
 TX_WINDOW_HOURS = int(os.getenv("TX_WINDOW_HOURS", "48"))      # how old a tx may be
 MIN_CONFIRM_LEVEL = os.getenv("MIN_CONFIRM_LEVEL", "finalized")
+
+# ---------------------------------------------------------------- user wallets
+# MASTER SEED: when set, the bot generates a UNIQUE deterministic wallet for
+# every user (sha256(seed | user_id)) when they tap "GENERATE WALLET".
+# Leave empty to generate random wallets per user instead.
+WALLET_SEED = os.getenv("WALLET_SEED", "").strip()
 
 # ---------------------------------------------------------------- subscriptions
 REMIND_BEFORE_HOURS = [

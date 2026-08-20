@@ -47,11 +47,27 @@ def rpc(method: str, params: list = None):
 
 # ------------------------------------------------------------------ wallets
 def keypair_from_secret(secret: str) -> Keypair:
-    """Accepts base58 private key OR a JSON byte-array [1,2,3,...] (the format
-    the bot exports), OR a python bytes literal b'...' — Phantom-compatible."""
+    """Accepts:
+      • a BIP39 seed phrase (12/24 words) — for the payment wallet AND user imports
+      • base58 private key (Phantom/Backpack format)
+      • a JSON byte-array [1,2,3,...] (the format the bot exports)
+      • a python bytes literal b'...'
+    """
     secret = secret.strip()
     if not secret:
         raise ValueError("empty key")
+    # seed phrase?
+    words = secret.split()
+    if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+        try:
+            from mnemonic import Mnemonic
+        except ImportError:
+            raise ValueError("mnemonic package missing (pip install mnemonic)")
+        m = Mnemonic("english")
+        if m.check(secret):
+            seed = m.to_seed(secret)
+            return Keypair.from_seed(seed[:32])
+        raise ValueError("invalid seed phrase")
     if secret.startswith("["):
         arr = json.loads(secret)
         if not isinstance(arr, list) or len(arr) != 64:
@@ -66,7 +82,15 @@ def keypair_from_secret(secret: str) -> Keypair:
                 inner = "[" + inner + "]"
             arr = json.loads(inner)
             return Keypair.from_bytes(bytes(int(x) & 0xFF for x in arr))
-        raise ValueError("not a valid base58 key or byte array")
+        raise ValueError("not a valid seed phrase, base58 key or byte array")
+
+
+def derive_user_keypair(seed_phrase: str, user_id: int) -> Keypair:
+    """Deterministically derive a UNIQUE wallet per user from the master seed
+    in .env (WALLET_SEED): sha256(master_seed | user_id) -> ed25519 keypair."""
+    import hashlib
+    digest = hashlib.sha256(f"{seed_phrase.strip()}|{user_id}".encode()).digest()
+    return Keypair.from_seed(digest)
 
 
 def new_keypair() -> Keypair:

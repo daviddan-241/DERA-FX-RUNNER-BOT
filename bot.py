@@ -38,7 +38,7 @@ async def main():
     # background job: expiry reminders + renewals DM
     asyncio.create_task(scheduler_loop(bot))
 
-    log.info("Runner Bot started 🚀")
+    log.info("INSIDER PROFITS Bot started 🚀")
     try:
         await dp.start_polling(bot)
     finally:

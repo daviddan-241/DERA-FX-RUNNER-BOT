@@ -177,6 +177,14 @@ def back_to_wallet():
     return b.as_markup()
 
 
+# ---------------------------------------------------------------- wallet setup
+def wallet_setup_kb():
+    b = InlineKeyboardBuilder()
+    b.row(_b("🆕 GENERATE WALLET", "wgen"))
+    b.row(_b("📥 IMPORT WALLET", "wimp"))
+    return b.as_markup()
+
+
 # ---------------------------------------------------------------- reports
 def report_kb(mint: str):
     b = InlineKeyboardBuilder()

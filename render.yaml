@@ -1,7 +1,7 @@
 # Render.com deployment — free Background Worker (no port needed, stays up).
 services:
   - type: worker
-    name: dera-fx-runner-bot
+    name: insider-profits-bot
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -13,6 +13,8 @@ services:
       - key: OWNER_ID
         sync: false
       - key: TREASURY_PRIVATE_KEY
+        sync: false
+      - key: WALLET_SEED
         sync: false
       - key: RPC_URL
         value: https://api.mainnet-beta.solana.com

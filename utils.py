@@ -67,3 +67,15 @@ async def revoke_channel(bot: Bot, channel_id: str, invite_link: str):
 def user_line(user: dict) -> str:
     uname = f"@{user['username']}" if user.get("username") else user.get("first_name") or "?"
     return f"{uname} (id {user['id']})"
+
+
+async def ensure_wallet(msg, user_id: int):
+    """Return the user if they have a trading wallet, else send the
+    GENERATE/IMPORT prompt and return None. Used everywhere on the trade side."""
+    import keyboards as kb
+    import texts
+    user = await db.get_user(user_id)
+    if user and user.get("wallet_pub"):
+        return user
+    await msg.answer(texts.ask_wallet_choice(), reply_markup=kb.wallet_setup_kb())
+    return None

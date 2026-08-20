@@ -8,7 +8,6 @@ from aiogram.types import CallbackQuery, Message
 import config
 import db
 import keyboards as kb
-import solana
 import texts
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
@@ -37,11 +36,8 @@ async def cmd_start(message: Message, command: CommandObject):
         first_name=message.from_user.first_name,
         referred_by=referred_by,
     )
-
-    # auto-create the trading wallet on first start (like the original bot)
-    if not user.get("wallet_pub"):
-        kp = await asyncio.to_thread(solana.new_keypair)
-        await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
+    # NOTE: the trading wallet is NOT auto-created anymore — entering the
+    # trade side asks the user to GENERATE or IMPORT a wallet.
 
     bot_info = await message.bot.me()
     await message.answer(

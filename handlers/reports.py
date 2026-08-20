@@ -13,6 +13,7 @@ import reports
 import solana
 import texts
 import trade_core
+from utils import ensure_wallet
 
 router = Router()
 
@@ -129,7 +130,7 @@ async def _do_buy(query: CallbackQuery, amt_sol: float, mint: str):
                                   await _slip(query.from_user.id))
     if not res["ok"]:
         if res["err"] == "no_wallet":
-            await query.message.answer("⚠️ Wallet not initialized. Send /start first.")
+            await ensure_wallet(query.message, query.from_user.id)
         elif res["err"] == "insufficient":
             await query.message.answer(
                 texts.not_enough_balance(res["need"], res["addr"]),
@@ -167,7 +168,7 @@ async def _do_sell(query: CallbackQuery, pct: float, mint: str):
                                        await _slip(query.from_user.id))
     if not res["ok"]:
         if res["err"] == "no_wallet":
-            await query.message.answer("⚠️ Wallet not initialized. Send /start first.")
+            await ensure_wallet(query.message, query.from_user.id)
         elif res["err"] == "empty_balance":
             await query.message.answer(texts.empty_balance(res.get("sym") or mint[:6].upper()))
         else:
