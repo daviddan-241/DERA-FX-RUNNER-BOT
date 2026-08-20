@@ -1,0 +1,60 @@
+# Render.com deployment — free Background Worker (no port needed, stays up).
+services:
+  - type: worker
+    name: dera-fx-runner-bot
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    autoDeploy: true
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        sync: false
+      - key: TREASURY_PRIVATE_KEY
+        sync: false
+      - key: RPC_URL
+        value: https://api.mainnet-beta.solana.com
+      - key: MIN_CONFIRM_LEVEL
+        value: finalized
+      - key: TX_WINDOW_HOURS
+        value: "48"
+      - key: NEWBIE_PRICE
+        value: "1"
+      - key: NEWBIE_DAYS
+        value: "30"
+      - key: BEGINNER_PRICE
+        value: "2"
+      - key: BEGINNER_DAYS
+        value: "30"
+      - key: PRO_PRICE
+        value: "4"
+      - key: PRO_DAYS
+        value: "30"
+      - key: ELITE_PRICE
+        value: "8"
+      - key: ELITE_DAYS
+        value: "60"
+      - key: INSIDER_PRICE
+        value: "5"
+      - key: INSIDER_DAYS
+        value: "30"
+      - key: INSIDER_CHANNEL_ID
+        sync: false
+      - key: CHANNEL_PASSES
+        sync: false
+      - key: SUPPORT_LINK
+        sync: false
+      - key: TZ
+        value: Africa/Lagos
+      - key: FREE_REPORTS
+        value: "3"
+      - key: REF_PERCENT
+        value: "50"
+      - key: REMIND_BEFORE_HOURS
+        value: "48,24,6,1"
+      - key: LIMIT_MAX_ATTEMPTS
+        value: "3"
+      - key: AD_LINE
+        value: Trade, Earn & Launch on Vyper

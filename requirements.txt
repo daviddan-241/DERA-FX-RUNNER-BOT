@@ -1,0 +1,5 @@
+aiogram>=3.13,<4
+solders==0.29.0
+aiosqlite
+python-dotenv
+requests

@@ -1,0 +1,23 @@
+# secrets — NEVER commit these
+.env
+.env.*
+!.env.example
+
+# data
+runner.db
+runner.db-journal
+runner.db-wal
+runner.db-shm
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# misc
+.DS_Store
+*.log
