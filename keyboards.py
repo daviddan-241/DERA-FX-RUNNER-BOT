@@ -22,7 +22,7 @@ def main_menu():
     b = InlineKeyboardBuilder()
     b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
     if insider_pass():
-        b.row(_b(f"🚀 JOIN INSIDER - {insider_pass()['price']:g} SOL", "pass|insider"))
+        b.row(_b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
     b.row(_b("📢 CHANNELS", "channels"), _b("📊 MY SUB", "mysub"))
     if config.PUBLIC_CHANNEL_LINK:
         b.row(InlineKeyboardButton(text="📣 PUBLIC CHANNEL", url=config.PUBLIC_CHANNEL_LINK))
@@ -36,7 +36,7 @@ def pay_menu():
     for p in PLANS:
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL", f"plan|{p['key']}"))
     if insider_pass():
-        b.row(_b(f"🚀 JOIN INSIDER - {insider_pass()['price']:g} SOL", "pass|insider"))
+        b.row(_b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
     b.row(_b("📢 Channel Subscriptions", "channels"))
     b.row(_b("📊 My Subscription", "mysub"), _b("🔙 Back", "menu"))
     return b.as_markup()
@@ -59,7 +59,7 @@ def channels_kb():
             continue  # insider has its own big button
         b.row(_b(f"{c['name']} - {c['price']:g} SOL", f"pass|{c['key']}"))
     if not CHANNEL_PASSES or all(c["key"] == "insider" for c in CHANNEL_PASSES):
-        b.row(_b("🚀 JOIN INSIDER - " + (f"{insider_pass()['price']:g} SOL" if insider_pass() else "?"), "pass|insider"))
+        b.row(_b("🚀 JOIN " + ((insider_pass()["name"] + " - " + f"{insider_pass()['price']:g} SOL") if insider_pass() else "?"), "pass|insider"))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 

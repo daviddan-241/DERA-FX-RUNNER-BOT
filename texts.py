@@ -3,7 +3,7 @@ All bot texts — cloned word-for-word from the original Runner Bot screenshots
 (with the upgraded membership plans), plus the new DM/channel features.
 """
 import html
-from config import PLANS, CHANNEL_PASSES, AD_LINE, DOCS_URL, SUPPORT_LINK, FREE_REPORTS
+from config import PLANS, CHANNEL_PASSES, AD_LINE, DOCS_URL, SUPPORT_LINK, FREE_REPORTS, INSIDER_NAME
 
 
 def esc(s):
@@ -24,7 +24,7 @@ def welcome(name: str, bot_username: str, public_link: str = ""):
     pub = f"\n📣 Public channel: {public_link}" if public_link else ""
     return (
         f"Welcome, {esc(name)}!\n"
-        "The INSIDER PROFITS Bot is ready 🚀\n"
+        "The Private Alpha Bot is ready 🚀\n"
         f"{pub}\n\n"
         "The list of commands:\n\n"
         "📊 /top [contract address] - Get a SMART token holders report\n"
@@ -56,7 +56,7 @@ def membership_header():
         "Please, pick your plan:\n\n"
         "⚡ Early entries • Buy zones • Take-profit targets\n"
         "📈 Market updates • Trade alerts • Premium access\n\n"
-        "🚀 Or join the INSIDER channel at the bottom 👇"
+        f"🚀 Or join the {INSIDER_NAME} channel at the bottom 👇"
     )
 
 
@@ -70,8 +70,8 @@ def plan_detail(p):
 def pass_detail(c):
     if c["key"] == "insider":
         return (
-            f"🚀 INSIDER ACCESS — {fmt_price(c['price'])} SOL ({days_word(c['days'])})\n\n"
-            "The private INSIDER channel:\n"
+            f"🚀 {c['name']} ACCESS — {fmt_price(c['price'])} SOL ({days_word(c['days'])})\n\n"
+            f"The private {INSIDER_NAME} channel:\n"
             "• Earliest entries before everyone else\n"
             "• Buy zones & take-profit targets\n"
             "• Real-time market updates & trade alerts\n"

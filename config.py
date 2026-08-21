@@ -186,7 +186,7 @@ CHANNEL_PASSES = parse_passes(os.getenv("CHANNEL_PASSES", ""))
 #  🚀 INSIDER — the dedicated "Join Insider" channel pass (its own price
 #  & duration; shows as a big button right under the membership plans).
 # ---------------------------------------------------------------------
-INSIDER_NAME = os.getenv("INSIDER_NAME", "Insider").strip()
+INSIDER_NAME = os.getenv("INSIDER_NAME", "Private Alpha").strip()
 INSIDER_PRICE = float(os.getenv("INSIDER_PRICE", "5"))
 INSIDER_DAYS = int(os.getenv("INSIDER_DAYS", "30"))
 INSIDER_CHANNEL_ID = os.getenv("INSIDER_CHANNEL_ID", "").strip()

@@ -1,5 +1,5 @@
 """
-INSIDER PROFITS Bot — run:  python bot.py
+Private Alpha Bot — run:  python bot.py
 Also starts a tiny HTTP health server (PORT env) so Render's web-service
 health check and UptimeRobot pings get 200 OK — keeps the free tier awake.
 """
@@ -75,7 +75,7 @@ async def main():
     # background job: expiry reminders + limit orders
     asyncio.create_task(scheduler_loop(bot))
 
-    log.info("INSIDER PROFITS Bot started 🚀")
+    log.info("Private Alpha Bot started 🚀")
     try:
         await dp.start_polling(bot)
     finally:

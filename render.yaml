@@ -4,7 +4,7 @@
 #   • UptimeRobot pings keep the free web service from sleeping
 services:
   - type: web
-    name: insider-profits-bot
+    name: private-alpha-bot
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt

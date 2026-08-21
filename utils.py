@@ -26,16 +26,22 @@ async def get_treasury_secret() -> str:
 
 
 async def get_treasury_address() -> str:
-    """The address payments are verified against:
-    private key (DB/env) first, then TREASURY_ADDRESS from .env."""
+    """The address payments are verified against. Order:
+    1) /setaddress (DB)  2) TREASURY_ADDRESS in .env  3) private key derived.
+    NO private key needed — a public receiving address is enough."""
     import solana
+    stored = await db.get_setting("treasury_addr", "")
+    if stored and "PASTE" not in stored.upper():
+        return stored.strip()
+    if config.TREASURY_ADDRESS and "PASTE" not in config.TREASURY_ADDRESS.upper():
+        return config.TREASURY_ADDRESS.strip()
     secret = await get_treasury_secret()
     if secret:
         try:
             return solana.treasury_address_from(secret)
         except Exception:
             pass
-    return config.TREASURY_ADDRESS
+    return ""
 
 
 async def effective_channel_id(item: dict) -> str:

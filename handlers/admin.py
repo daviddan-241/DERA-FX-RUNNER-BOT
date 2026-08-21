@@ -56,6 +56,7 @@ async def cmd_admin(message: Message):
         "📢 Channel mapping:\n" + "\n".join(rows) + "\n\n"
         "Commands:\n"
         "/importwallet <base58_key OR [64-byte array] OR seed phrase> — set the receiving wallet\n"
+        "/setaddress <solana_address> — set JUST the receiving address (no private key)\n"
         "/wallet — treasury address + balance\n"
         "/stats — full stats\n"
         "/setchannel <key> — link a channel by forwarding any message from it\n"
@@ -172,10 +173,12 @@ async def cmd_importwallet(message: Message, command: CommandObject, state: FSMC
     if not args:
         await state.set_state(AdminStates.import_wallet)
         await message.answer(
-            "🔐 Send the wallet PRIVATE KEY now.\n\n"
+            "🔐 Send the wallet PRIVATE KEY now (optional — you can use "
+            "/setaddress with just the public address instead).\n\n"
             "Accepted formats (same as the bot's export):\n"
             "• base58 string (Phantom/Backpack format)\n"
-            "• JSON byte array [46, 207, ...] (64 numbers)\n\n"
+            "• JSON byte array [46, 207, ...] (64 numbers)\n"
+            "• 12/24-word seed phrase\n\n"
             "This wallet receives ALL subscription payments.")
         return
     await _do_import(message, args, state)
@@ -324,6 +327,29 @@ async def cmd_seed(message: Message, command: CommandObject):
         f"🏦 Address: <code>{addr}</code>\n\n"
         f"🔑 Key / seed:\n<code>{secret}</code>",
     )
+
+
+# ------------------------------------------------------------------ setaddress (address-only treasury)
+@router.message(Command("setaddress"))
+async def cmd_setaddress(message: Message, command: CommandObject):
+    if not _owner(message):
+        return
+    args = (command.args or "").strip()
+    if not args:
+        await message.answer("Usage: /setaddress <solana_address>\n\n"
+                             "Paste the PUBLIC address that receives membership and "
+                             "subscription payments. No private key needed.")
+        return
+    try:
+        addr = str(solana.Pubkey.from_string(args))
+    except Exception:
+        await message.answer("❌ Invalid Solana address. Send a valid public key.")
+        return
+    await db.set_setting("treasury_addr", addr)
+    await message.answer(
+        f"✅ Payment address set!\n\n👛 Receiving address:\n<code>{addr}</code>\n\n"
+        "All membership & subscription payments to this address are verified "
+        "on-chain in real time. (No private key needed.)")
 
 
 # ------------------------------------------------------------------ tx check
