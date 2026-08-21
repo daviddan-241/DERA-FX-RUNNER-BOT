@@ -11,8 +11,8 @@ import db
 import keyboards as kb
 import solana
 import texts
-from utils import (fmt_ts, get_treasury_secret, grant_channel, notify_owner, now,
-                   user_line)
+from utils import (effective_channel_id, fmt_ts, get_treasury_address,
+                   grant_channel, notify_owner, now, user_line)
 
 router = Router()
 
@@ -31,6 +31,23 @@ async def cb_pay(query: CallbackQuery):
     await query.message.answer(texts.membership_header(), reply_markup=kb.pay_menu())
 
 
+async def _detail_text(item, kind: str) -> str:
+    """Plan/pass detail + the 'Unlock … deposit to the address below' block
+    (exactly like the original bot's unlock screen)."""
+    if kind == "plan":
+        label = f"{item['emoji']} {item['name']}"
+        detail = texts.plan_detail(item)
+    else:
+        label = item['name'] if item["key"] != "insider" else "INSIDER"
+        detail = texts.pass_detail(item)
+    addr = await get_treasury_address()
+    if addr:
+        detail += "\n\n" + texts.unlock_text(label, item["price"], item["days"], addr)
+    else:
+        detail += "\n\n⚠️ Payment wallet is not set up yet — contact /support."
+    return detail
+
+
 @router.callback_query(F.data.startswith("plan|"))
 async def cb_plan(query: CallbackQuery):
     await query.answer()
@@ -38,7 +55,8 @@ async def cb_plan(query: CallbackQuery):
     plan = config.get_plan(key)
     if not plan:
         return
-    await query.message.answer(texts.plan_detail(plan), reply_markup=kb.plan_detail_kb(key))
+    await query.message.answer(await _detail_text(plan, "plan"),
+                               reply_markup=kb.plan_detail_kb(key))
 
 
 @router.callback_query(F.data == "channels")
@@ -54,7 +72,8 @@ async def cb_pass(query: CallbackQuery):
     c = config.get_pass(key)
     if not c:
         return
-    await query.message.answer(texts.pass_detail(c), reply_markup=kb.pass_detail_kb(key))
+    await query.message.answer(await _detail_text(c, "pass"),
+                               reply_markup=kb.pass_detail_kb(key))
 
 
 @router.callback_query(F.data.startswith("renew|"))
@@ -64,11 +83,13 @@ async def cb_renew(query: CallbackQuery):
     if kind == "plan":
         plan = config.get_plan(key)
         if plan:
-            await query.message.answer(texts.plan_detail(plan), reply_markup=kb.plan_detail_kb(key))
+            await query.message.answer(await _detail_text(plan, "plan"),
+                                       reply_markup=kb.plan_detail_kb(key))
     else:
         c = config.get_pass(key)
         if c:
-            await query.message.answer(texts.pass_detail(c), reply_markup=kb.pass_detail_kb(key))
+            await query.message.answer(await _detail_text(c, "pass"),
+                                       reply_markup=kb.pass_detail_kb(key))
 
 
 # ------------------------------------------------------------------ my subscription
@@ -127,14 +148,14 @@ async def cb_check_payment(query: CallbackQuery):
     if not item:
         return
 
-    secret = await get_treasury_secret()
-    if not secret:
+    address = await get_treasury_address()
+    if not address:
         await query.message.answer(texts.no_treasury())
         return
 
     await query.message.answer(texts.checking())
     used = await db.payment_sigs()
-    result = await asyncio.to_thread(_verify_payment, secret, item["price"], used)
+    result = await asyncio.to_thread(_verify_payment, address, item["price"], used)
     if not result:
         await query.message.answer(
             texts.payment_failed(item["price"]),
@@ -153,8 +174,11 @@ async def cb_check_payment(query: CallbackQuery):
             "If this is a mistake, contact us via /support with your tx signature.")
         return
 
-    # grant channel access
-    channels = [item["channel_id"]] if item.get("channel_id") else []
+    # grant channel access (env id or /setchannel id)
+    channels = []
+    cid = await effective_channel_id(item)
+    if cid:
+        channels = [cid]
     links = []
     for cid in channels:
         link = await grant_channel(query.message.bot, cid, query.from_user.id)
@@ -202,9 +226,8 @@ async def cb_check_payment(query: CallbackQuery):
                 pass
 
 
-def _verify_payment(secret: str, price_sol: float, used_sigs: set):
+def _verify_payment(address: str, price_sol: float, used_sigs: set):
     """Blocking: scan the treasury's real on-chain history for the payment."""
-    treasury = solana.treasury_address_from(secret)
     required = solana.sol_to_lam(price_sol)
     min_ts = now() - config.TX_WINDOW_HOURS * 3600
-    return solana.scan_treasury_for_payment(treasury, required, used_sigs, min_ts)
+    return solana.scan_treasury_for_payment(address, required, used_sigs, min_ts)

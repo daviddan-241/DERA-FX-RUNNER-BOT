@@ -1,17 +1,17 @@
 """Owner/admin commands: import wallet, wallet, stats, verify, revoke, extend,
-check tx, broadcast."""
+check tx, broadcast, setchannel (link channels by forwarding a message)."""
 import asyncio
 
 from aiogram import Router
 from aiogram.filters import Command, CommandObject
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, MessageOriginChannel, MessageOriginChat
 
 import config
 import db
 import solana
-from utils import fmt_ts, get_treasury_secret, now
+from utils import fmt_ts, get_treasury_address, get_treasury_secret, now
 
 router = Router()
 
@@ -23,6 +23,7 @@ def _owner(message: Message) -> bool:
 class AdminStates(StatesGroup):
     import_wallet = State()
     broadcast = State()
+    set_channel = State()
 
 
 # ------------------------------------------------------------------ panel
@@ -30,23 +31,34 @@ class AdminStates(StatesGroup):
 async def cmd_admin(message: Message):
     if not _owner(message):
         return
-    secret = await get_treasury_secret()
-    addr = solana.treasury_address_from(secret) if secret else "NOT SET"
+    addr = await get_treasury_address()
     users = await db.count_users()
     revenue, pays = await db.total_revenue_lamports()
     subs = await db.active_subs_all()
     active = len([s for s in subs if not s["end_ts"] or s["end_ts"] > now()])
+
+    # channel mapping (env id or /setchannel id)
+    rows = []
+    for p in config.PLANS:
+        cid = p["channel_id"] or await db.get_setting(f"ch_{p['key']}", "") or "—"
+        rows.append(f"{p['emoji']} {p['key']}: {cid}")
+    for c in config.CHANNEL_PASSES:
+        cid = c["channel_id"] or await db.get_setting(f"ch_{c['key']}", "") or "—"
+        rows.append(f"📢 {c['key']}: {cid}")
+
     await message.answer(
         "🛠 ADMIN PANEL\n\n"
         f"👥 Users: {users}\n"
         f"💎 Active subscriptions: {active}\n"
         f"💰 Payments: {pays}\n"
         f"💵 Revenue: {solana.lam_to_sol(revenue):g} SOL\n\n"
-        f"👛 Treasury: <code>{addr}</code>\n\n"
+        f"👛 Treasury: <code>{addr or 'NOT SET'}</code>\n\n"
+        "📢 Channel mapping:\n" + "\n".join(rows) + "\n\n"
         "Commands:\n"
-        "/importwallet <base58_key OR [64-byte array]> — set the receiving wallet\n"
+        "/importwallet <base58_key OR [64-byte array] OR seed phrase> — set the receiving wallet\n"
         "/wallet — treasury address + balance\n"
         "/stats — full stats\n"
+        "/setchannel <key> — link a channel by forwarding any message from it\n"
         "/verify <user_id> <newbie|beginner|pro|elite> — manual grant (no tx needed)\n"
         "/verify <user_id> <pass name> — manual grant of a channel pass\n"
         "/revoke <user_id> — end a user's subscriptions\n"
@@ -55,6 +67,79 @@ async def cmd_admin(message: Message):
         "/broadcast <text> — DM all users\n"
         "/importwallet — without args asks for the key in the next message"
     )
+
+
+# ------------------------------------------------------------------ setchannel
+@router.message(Command("setchannel"))
+async def cmd_setchannel(message: Message, command: CommandObject, state: FSMContext):
+    if not _owner(message):
+        return
+    keys = [p["key"] for p in config.PLANS] + [c["key"] for c in config.CHANNEL_PASSES]
+    args = (command.args or "").strip().lower()
+    if args not in keys:
+        await message.answer(
+            "Usage: /setchannel <key>\n\nKeys: " + ", ".join(keys))
+        return
+    await state.set_state(AdminStates.set_channel)
+    await state.update_data(ch_key=args)
+    await message.answer(
+        f"📌 Link the channel for '{args}':\n\n"
+        "• Forward ANY message from that channel here, or\n"
+        "• Send its @username, or\n"
+        "• Send its numeric chat id.\n\n"
+        "🤖 Note: invite links (t.me/+…) can't be read by bots — "
+        "forward a message instead. That's it.")
+
+
+@router.message(AdminStates.set_channel)
+async def got_channel_ref(message: Message, state: FSMContext):
+    data = await state.get_data()
+    key = data.get("ch_key")
+    cid = await _resolve_chat_ref(message)
+    if cid is None:
+        await message.answer(
+            "❌ Couldn't read that.\n\n"
+            "If you sent an invite link (t.me/+…) — bots can't read those.\n"
+            "👉 Forward any message from the channel, or send @username / numeric id:")
+        return
+    await db.set_setting(f"ch_{key}", str(cid))
+    await state.clear()
+    await message.answer(
+        f"✅ Channel for '{key}' saved: id {cid}\n\n"
+        "Users will get the invite link from this channel as soon as their "
+        "payment is verified. (/admin shows the full mapping)")
+
+
+async def _resolve_chat_ref(message: Message):
+    """Resolve a channel id from a forwarded message / @username / numeric id.
+    Invite links can't be resolved by bots -> None."""
+    origin = message.forward_origin
+    if origin is not None:
+        if isinstance(origin, MessageOriginChannel):
+            return origin.chat.id
+        if isinstance(origin, MessageOriginChat):
+            return origin.sender_chat.id
+    if message.forward_from_chat:
+        return message.forward_from_chat.id
+    txt = (message.text or "").strip()
+    if not txt:
+        return None
+    if txt.lstrip("-").isdigit():
+        return int(txt)
+    if "t.me/+" in txt or "joinchat" in txt:
+        return None  # private invite links — bots can't read them
+    if txt.startswith("@"):
+        try:
+            return (await message.bot.get_chat(txt)).id
+        except Exception:
+            return None
+    if "t.me/" in txt:
+        tail = txt.split("t.me/")[-1].split("/")[0].split("?")[0]
+        try:
+            return (await message.bot.get_chat("@" + tail)).id
+        except Exception:
+            return None
+    return None
 
 
 @router.message(Command("stats"))
@@ -118,15 +203,20 @@ async def _do_import(message: Message, secret: str, state: FSMContext):
 async def cmd_wallet(message: Message):
     if not _owner(message):
         return
-    secret = await get_treasury_secret()
-    if not secret:
-        await message.answer("⚠️ Treasury wallet is NOT set.\nUse /importwallet or set TREASURY_PRIVATE_KEY in .env")
+    addr = await get_treasury_address()
+    if not addr:
+        await message.answer(
+            "⚠️ Treasury wallet is NOT set.\n"
+            "Use /importwallet, or set TREASURY_PRIVATE_KEY or TREASURY_ADDRESS in .env")
         return
-    addr = solana.treasury_address_from(secret)
+    secret = await get_treasury_secret()
     balance = await asyncio.to_thread(solana.sol_balance, addr)
+    note = ("" if secret else
+            "\n\n⚠️ Only the ADDRESS is set — payments verify fine, but referral-credit "
+            "payouts need the private key (/importwallet).")
     await message.answer(
         f"👛 Treasury wallet:\n<code>{addr}</code>\n\n"
-        f"💰 Balance: {solana.lam_to_sol(balance):g} SOL")
+        f"💰 Balance: {solana.lam_to_sol(balance):g} SOL{note}")
 
 
 # ------------------------------------------------------------------ manual verify / revoke / extend
@@ -210,11 +300,10 @@ async def cmd_check(message: Message, command: CommandObject):
     if not sig:
         await message.answer("Usage: /check <tx_signature>")
         return
-    secret = await get_treasury_secret()
-    if not secret:
+    addr = await get_treasury_address()
+    if not addr:
         await message.answer("⚠️ Treasury not set.")
         return
-    addr = solana.treasury_address_from(secret)
     res = await asyncio.to_thread(solana.verify_single_tx, sig, addr)
     if res is None:
         await message.answer("❌ Transaction not found.")

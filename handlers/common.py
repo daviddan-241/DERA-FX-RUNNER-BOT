@@ -41,7 +41,8 @@ async def cmd_start(message: Message, command: CommandObject):
 
     bot_info = await message.bot.me()
     await message.answer(
-        texts.welcome(message.from_user.first_name or "trader", bot_info.username),
+        texts.welcome(message.from_user.first_name or "trader", bot_info.username,
+                      config.PUBLIC_CHANNEL_LINK),
         reply_markup=kb.main_menu(),
     )
 
@@ -126,7 +127,8 @@ async def cb_menu(query: CallbackQuery):
         return
     bot_info = await query.message.bot.me()
     await query.message.answer(
-        texts.welcome(user.get("first_name") or "trader", bot_info.username),
+        texts.welcome(user.get("first_name") or "trader", bot_info.username,
+                      config.PUBLIC_CHANNEL_LINK),
         reply_markup=kb.main_menu(),
     )
 

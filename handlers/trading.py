@@ -15,7 +15,7 @@ import keyboards as kb
 import solana
 import texts
 import trade_core
-from utils import ensure_wallet, notify_owner, user_line
+from utils import ensure_wallet, get_treasury_secret, notify_owner, user_line
 
 router = Router()
 
@@ -529,6 +529,9 @@ async def cb_lcancel(query: CallbackQuery):
     if ok:
         await query.message.answer(f"❌ Limit order #{order_id} cancelled.")
     await _show_limits(query.message)
+
+
+# ------------------------------------------------------------------ referral credits withdraw
 @router.callback_query(F.data == "wdcredits")
 async def cb_wd_credits(query: CallbackQuery, state: FSMContext):
     await query.answer()
@@ -539,10 +542,10 @@ async def cb_wd_credits(query: CallbackQuery, state: FSMContext):
     if credits <= 0:
         await query.message.answer("⛔ You have no referral credits to withdraw.")
         return
-    # pay credits into the user's trading wallet (on-chain)
-    secret = await db.get_setting("treasury_pk", "") or None
+    # pay credits into the user's trading wallet (on-chain) — needs the PRIVATE KEY
+    secret = await get_treasury_secret()
     if not secret:
-        await query.message.answer("⚠️ Payment wallet is not configured yet.")
+        await query.message.answer("⚠️ Payment wallet key is not configured yet.")
         return
     try:
         kp = solana.treasury_keypair_from(secret)

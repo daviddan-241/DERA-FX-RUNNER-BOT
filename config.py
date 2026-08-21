@@ -33,8 +33,16 @@ REF_PERCENT = float(os.getenv("REF_PERCENT", "50"))
 # The bot's receiving wallet (imported by the owner via /importwallet or env).
 # Accepts: base58 private key, [64-byte array], OR a 12/24-word seed phrase.
 TREASURY_PRIVATE_KEY = os.getenv("TREASURY_PRIVATE_KEY", "").strip()
+# ALTERNATIVE: just a public receiving ADDRESS (no key). Payments are still
+# verified on-chain against it. You need the private key (above or
+# /importwallet) only for referral-credit payouts.
+TREASURY_ADDRESS = os.getenv("TREASURY_ADDRESS", "").strip()
 TX_WINDOW_HOURS = int(os.getenv("TX_WINDOW_HOURS", "48"))      # how old a tx may be
 MIN_CONFIRM_LEVEL = os.getenv("MIN_CONFIRM_LEVEL", "finalized")
+
+# ---------------------------------------------------------------- public channel
+# Free public channel — shown as a button in the main menu + welcome message.
+PUBLIC_CHANNEL_LINK = os.getenv("PUBLIC_CHANNEL_LINK", "").strip()
 
 # ---------------------------------------------------------------- user wallets
 # MASTER SEED: when set, the bot generates a UNIQUE deterministic wallet for
