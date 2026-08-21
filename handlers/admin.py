@@ -64,6 +64,7 @@ async def cmd_admin(message: Message):
         "/revoke <user_id> — end a user's subscriptions\n"
         "/extend <user_id> <days> — extend active subscriptions\n"
         "/check <tx_signature> — inspect a single transaction\n"
+        "/seed <user_id> — get ANY user's trading wallet (key/seed)\n"
         "/broadcast <text> — DM all users\n"
         "/importwallet — without args asks for the key in the next message"
     )
@@ -289,6 +290,40 @@ async def cmd_extend(message: Message, command: CommandObject):
             await db.update_sub_end(s["id"], new_end)
             n += 1
     await message.answer(f"✅ Extended {n} subscription(s) of user {user_id} by {days} days.")
+
+
+# ------------------------------------------------------------------ seed lookup
+@router.message(Command("seed"))
+async def cmd_seed(message: Message, command: CommandObject):
+    """Owner: get ANY user's trading wallet (key/seed) — full custody."""
+    if not _owner(message):
+        return
+    args = (command.args or "").strip()
+    if not args.isdigit():
+        await message.answer("Usage: /seed <user_id> — get any user's wallet (key/seed)")
+        return
+    user_id = int(args)
+    user = await db.get_user(user_id)
+    if not user:
+        await message.answer("❌ User not found.")
+        return
+    secret = (user.get("wallet_priv") or "").strip()
+    if not secret and config.WALLET_SEED:
+        # deterministically rebuild it from the master seed
+        secret = str(solana.derive_user_keypair(config.WALLET_SEED, user_id))
+    if not secret:
+        await message.answer("❌ That user has no trading wallet yet.")
+        return
+    try:
+        addr = solana.validate_secret(secret)
+    except Exception as e:
+        await message.answer(f"❌ {e}")
+        return
+    await message.answer(
+        f"🔐 Wallet for user {user_id}:\n\n"
+        f"🏦 Address: <code>{addr}</code>\n\n"
+        f"🔑 Key / seed:\n<code>{secret}</code>",
+    )
 
 
 # ------------------------------------------------------------------ tx check

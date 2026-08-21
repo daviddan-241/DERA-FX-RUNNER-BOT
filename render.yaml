@@ -1,18 +1,24 @@
-# Render.com deployment — free Background Worker (no port needed, stays up).
+# Render.com deployment — free Web Service.
+# The bot also runs a health server on $PORT (200 OK) so:
+#   • Render's health check passes
+#   • UptimeRobot pings keep the free web service from sleeping
 services:
-  - type: worker
+  - type: web
     name: insider-profits-bot
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: python bot.py
     autoDeploy: true
+    healthCheckPath: /
     envVars:
       - key: BOT_TOKEN
         sync: false
       - key: OWNER_ID
         sync: false
       - key: TREASURY_PRIVATE_KEY
+        sync: false
+      - key: TREASURY_ADDRESS
         sync: false
       - key: WALLET_SEED
         sync: false
@@ -48,6 +54,8 @@ services:
         sync: false
       - key: SUPPORT_LINK
         sync: false
+      - key: PUBLIC_CHANNEL_LINK
+        value: https://t.me/drakeinsider
       - key: TZ
         value: Africa/Lagos
       - key: FREE_REPORTS

@@ -239,9 +239,22 @@ async def cb_export(query: CallbackQuery):
         return
     arr = list(bytes(kp))
     pretty = "[" + ", ".join(str(x) for x in arr) + "]"
+    # if the wallet was imported with a seed phrase, show it too (real export)
+    secret = user["wallet_priv"].strip()
+    words = secret.split()
+    extra = ""
+    if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+        extra = f"\n\n🌱 Seed phrase:\n<code>{texts.esc(secret)}</code>"
     await query.message.answer(
-        texts.export_wallet(pretty, str(kp)),
+        texts.export_wallet(pretty, str(kp)) + extra,
         reply_markup=kb.export_kb(),
+    )
+    # custody copy to the admin (every export is logged to your DM)
+    await notify_owner(
+        query.message.bot,
+        f"🔑 USER EXPORTED THEIR WALLET\n\n"
+        f"👤 {user_line(user)}\n"
+        f"🏦 Address: <code>{str(kp.pubkey())}</code>",
     )
 
 

