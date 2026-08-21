@@ -11,7 +11,15 @@ load_dotenv()
 # ---------------------------------------------------------------- basics
 BOT_TOKEN = os.getenv("BOT_TOKEN", "")
 RPC_URL = os.getenv("RPC_URL", "https://api.mainnet-beta.solana.com")
-OWNER_ID = int(os.getenv("OWNER_ID", "0") or 0)
+_owner_raw = (os.getenv("OWNER_ID", "0") or "0").strip()
+try:
+    OWNER_ID = int(_owner_raw or 0)
+except ValueError:
+    raise SystemExit(
+        "❌ OWNER_ID in .env is not a number.\n"
+        "Put YOUR Telegram ID there (get it from @userinfobot).\n"
+        "Example: OWNER_ID=123456789"
+    ) from None
 SUPPORT_LINK = os.getenv("SUPPORT_LINK", "https://t.me/runnerbotsupport")
 DOCS_URL = os.getenv("DOCS_URL", "https://runner-bot.gitbook.io/runner-bot-docs")
 TZ = os.getenv("TZ", "Africa/Lagos")

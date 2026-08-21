@@ -28,8 +28,14 @@ def build_dispatcher() -> Dispatcher:
 
 
 async def main():
-    if not config.BOT_TOKEN:
-        raise SystemExit("BOT_TOKEN is not set. Copy .env.example to .env and fill it in.")
+    if not config.BOT_TOKEN or "PASTE" in config.BOT_TOKEN.upper():
+        raise SystemExit(
+            "❌ BOT_TOKEN is not set (or still the placeholder).\n"
+            "Open .env, put your real token from @BotFather, and restart."
+        )
+    if not config.OWNER_ID:
+        print("⚠️ OWNER_ID is 0 — admin commands and admin DMs are disabled "
+              "until you set your Telegram ID in .env.")
     await db.init_db()
 
     bot = Bot(token=config.BOT_TOKEN)

