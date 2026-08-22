@@ -271,6 +271,14 @@ async def _finalize_payment(bot, msg: Message, user_id: int, kind: str, item: di
             links.append(link)
     links_block = "\n".join(f"🔗 {l}" for l in links)
 
+    if kind == "pass" and not links:
+        await notify_owner(
+            bot,
+            f"⚠️ {label} was paid ({lamports / 1e9:g} SOL) but NO channel is "
+            f"configured for it yet — no invite link was generated.\n"
+            f"👤 {user_line(await db.get_user(user_id))}\n"
+            f"Use /setchannel {item['key']} then send the link manually.")
+
     sub = await db.add_subscription(
         user_id=user_id, kind=kind, item_key=item["key"], label=label,
         lamports=lamports, days=item["days"], tx_sig=sig, payer=payer,
@@ -285,8 +293,10 @@ async def _finalize_payment(bot, msg: Message, user_id: int, kind: str, item: di
     )
 
     user = await db.get_user(user_id)
-    await notify_owner(bot, texts.owner_payment_alert(user_line(user), label,
-                                                      lamports / 1e9, sig))
+    await notify_owner(
+        bot,
+        texts.owner_payment_alert(user_line(user), label, lamports / 1e9, sig),
+        reply_markup=kb.owner_tx_kb(sig))
 
     if user and user.get("referred_by"):
         credit = int(lamports * config.REF_PERCENT / 100)

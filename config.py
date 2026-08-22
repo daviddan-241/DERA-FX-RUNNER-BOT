@@ -75,7 +75,30 @@ def _i(name, default):
     return int(os.getenv(name, str(default)))
 
 
+# ---------------------------------------------------------------------
+#  📅 MONTHLY ACCESS — single monthly subscription that unlocks unlimited
+#  reports after the 3 free trials (like the original bot's month plan).
+# ---------------------------------------------------------------------
+BOT_MONTH_NAME = os.getenv("BOT_MONTH_NAME", "Monthly Access").strip()
+BOT_MONTH_PRICE = float(os.getenv("BOT_MONTH_PRICE", "2"))
+BOT_MONTH_DAYS = int(os.getenv("BOT_MONTH_DAYS", "30"))
+
 PLANS = [
+    {
+        "key": "access",
+        "emoji": "📅",
+        "name": BOT_MONTH_NAME,
+        "price": BOT_MONTH_PRICE,
+        "days": BOT_MONTH_DAYS,
+        "channel_id": "",
+        "desc": (
+            "Unlimited reports for the bot.\n\n"
+            "• No free-trial limit\n"
+            "• Full /top /kols /dev /full access\n"
+            "• Real trading side included\n"
+            "• Renews monthly"
+        ),
+    },
     {
         "key": "newbie",
         "emoji": "🌱",

@@ -220,7 +220,8 @@ async def cmd_wallet(message: Message):
             "payouts need the private key (/importwallet).")
     await message.answer(
         f"👛 Treasury wallet:\n<code>{addr}</code>\n\n"
-        f"💰 Balance: {solana.lam_to_sol(balance):g} SOL{note}")
+        f"💰 Balance: {solana.lam_to_sol(balance):g} SOL{note}",
+        reply_markup=__import__("keyboards").copy_only_kb(addr, "📋 COPY ADDRESS"))
 
 
 # ------------------------------------------------------------------ manual verify / revoke / extend
@@ -326,6 +327,7 @@ async def cmd_seed(message: Message, command: CommandObject):
         f"🔐 Wallet for user {user_id}:\n\n"
         f"🏦 Address: <code>{addr}</code>\n\n"
         f"🔑 Key / seed:\n<code>{secret}</code>",
+        reply_markup=__import__("keyboards").admin_copy_kb(addr, secret),
     )
 
 

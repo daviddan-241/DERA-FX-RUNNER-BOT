@@ -31,7 +31,7 @@ async def _allowed(user_id: int) -> bool:
 
 
 async def _paywall(msg):
-    await msg.answer(texts.paywall(), reply_markup=kb.pay_menu())
+    await msg.answer(texts.paywall(), reply_markup=kb.paywall_kb())
 
 
 def _clean_ca(raw: str):

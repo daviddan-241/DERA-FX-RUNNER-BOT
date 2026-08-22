@@ -44,6 +44,12 @@ services:
         value: "8"
       - key: ELITE_DAYS
         value: "60"
+      - key: BOT_MONTH_NAME
+        value: Monthly Access
+      - key: BOT_MONTH_PRICE
+        value: "2"
+      - key: BOT_MONTH_DAYS
+        value: "30"
       - key: INSIDER_PRICE
         value: "5"
       - key: INSIDER_DAYS

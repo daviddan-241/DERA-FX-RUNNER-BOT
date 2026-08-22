@@ -20,11 +20,25 @@ def insider_pass():
 # ---------------------------------------------------------------- main
 def main_menu():
     b = InlineKeyboardBuilder()
-    b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
     if insider_pass():
-        b.row(_b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
+        b.row(_b("📈 TRADING", "wp"),
+              _b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
+    else:
+        b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
     if config.PUBLIC_CHANNEL_LINK:
         b.row(InlineKeyboardButton(text="📣 PUBLIC CHANNEL", url=config.PUBLIC_CHANNEL_LINK))
+    return b.as_markup()
+
+
+def paywall_kb():
+    """Shown when the 3 free trial reports are used — single monthly access
+    first, then the membership tiers (like the original bot's paywall)."""
+    b = InlineKeyboardBuilder()
+    for p in PLANS[:1]:   # 📅 Monthly Access
+        b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL ({p['days']} days)", f"plan|{p['key']}"))
+    for p in PLANS[1:]:   # membership tiers
+        b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL", f"plan|{p['key']}"))
+    b.row(_b("🔙 Menu", "menu"))
     return b.as_markup()
 
 
@@ -170,11 +184,49 @@ def limit_confirm_kb():
     return b.as_markup()
 
 
-def export_kb(key: str = ""):
+def export_kb(key: str = "", seed: str = "", bytes_str: str = ""):
     b = InlineKeyboardBuilder()
-    if key:
-        b.row(InlineKeyboardButton(text="📋 COPY KEY", copy_text=CopyTextButton(text=key)))
+    if key and len(key) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY PRIVATE KEY", copy_text=CopyTextButton(text=key)))
+    if seed and len(seed) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY SEED", copy_text=CopyTextButton(text=seed)))
+    if bytes_str and len(bytes_str) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY KEY BYTES", copy_text=CopyTextButton(text=bytes_str)))
     b.row(_b("🔙 Back", "wp"))
+    return b.as_markup()
+
+
+# ---------------------------------------------------------------- copy helpers
+def copy_only_kb(text: str, label: str = "📋 COPY"):
+    b = InlineKeyboardBuilder()
+    if len(text) <= 256:
+        b.row(InlineKeyboardButton(text=label, copy_text=CopyTextButton(text=text)))
+    return b.as_markup()
+
+
+def wallet_done_kb(addr: str, key: str):
+    """After generate/import: copy buttons for the pub key and private key."""
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
+    if key and len(key) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY PRIVATE KEY", copy_text=CopyTextButton(text=key)))
+    b.row(_b("🔙 Back", "wp"))
+    return b.as_markup()
+
+
+def admin_copy_kb(addr: str, secret: str):
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
+    if secret and len(secret) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY KEY / SEED", copy_text=CopyTextButton(text=secret)))
+    return b.as_markup()
+
+
+def owner_tx_kb(sig: str):
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="🔗 SOLSCAN", url=f"https://solscan.io/tx/{sig}"))
+    if len(sig) <= 256:
+        b.row(InlineKeyboardButton(text="📋 COPY TX", copy_text=CopyTextButton(text=sig)))
     return b.as_markup()
 
 

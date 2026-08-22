@@ -2,13 +2,15 @@
 SQLite storage (aiosqlite): users, wallets, payments, subscriptions, settings.
 """
 import json
+import os
 import random
 import string
 import time
 
 import aiosqlite
 
-DB_PATH = "runner.db"
+# DATA_DIR lets you keep runner.db on a persistent disk (e.g. Render /var/data)
+DB_PATH = os.path.join(os.getenv("DATA_DIR", "."), "runner.db")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (

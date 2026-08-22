@@ -55,11 +55,11 @@ async def effective_channel_id(item: dict) -> str:
     return (stored or "").strip()
 
 
-async def notify_owner(bot: Bot, text: str):
+async def notify_owner(bot: Bot, text: str, reply_markup=None):
     if not config.OWNER_ID:
         return
     try:
-        await bot.send_message(config.OWNER_ID, text)
+        await bot.send_message(config.OWNER_ID, text, reply_markup=reply_markup)
     except Exception as e:
         print("owner notify failed:", e)
 
@@ -113,11 +113,13 @@ def parse_tx_ref(text: str):
 
 async def ensure_wallet(msg, user_id: int):
     """Return the user if they have a trading wallet, else send the
-    GENERATE/IMPORT prompt and return None. Used everywhere on the trade side."""
+    GENERATE/IMPORT prompt ONCE and return None.
+    Uses ensure_user so the user row ALWAYS exists (fixes the old bug where
+    generating did nothing and the prompt kept coming back)."""
     import keyboards as kb
     import texts
-    user = await db.get_user(user_id)
-    if user and user.get("wallet_pub"):
+    user = await db.ensure_user(user_id)
+    if user.get("wallet_pub"):
         return user
     await msg.answer(texts.ask_wallet_choice(), reply_markup=kb.wallet_setup_kb())
     return None

@@ -74,9 +74,10 @@ def pass_detail(c):
             "• Buy zones & take-profit targets\n"
             "• Real-time market updates & trade alerts\n"
             "• Direct line to the team\n\n"
-            "Pay once, get the invite link in your DM instantly after "
-            "your transaction is verified on-chain. We remind you in DM "
-            "before it ends so you never lose access."
+            "No link needed here — your channel invite link is DM'd to "
+            "you automatically right after your transaction is verified "
+            "on-chain. We remind you in DM before it ends so you never "
+            "lose access."
         )
     return (
         f"📢 {c['name']} — {fmt_price(c['price'])} SOL ({days_word(c['days'])})\n\n"
@@ -136,9 +137,14 @@ def payment_failed(price: float):
 
 
 def paywall():
+    plans = "\n".join(
+        f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL ({days_word(p['days'])})"
+        for p in PLANS
+    )
     return (
         f"🚫 {FREE_REPORTS}/{FREE_REPORTS} FREE reports were used!\n"
-        "To continue using Runner, please, pick your plan:"
+        "To continue using Private Alpha, please, pick your plan:\n\n"
+        f"{plans}"
     )
 
 

