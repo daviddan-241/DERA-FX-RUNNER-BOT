@@ -39,6 +39,19 @@ async def cmd_start(message: Message, command: CommandObject):
     # NOTE: the trading wallet is NOT auto-created anymore — entering the
     # trade side asks the user to GENERATE or IMPORT a wallet.
 
+    # notify the admin about every NEW user that starts the bot
+    import time as _t
+    from utils import notify_owner, user_line
+    if user.get("created_at") and (int(_t.time()) - int(user["created_at"])) < 10:
+        try:
+            total = await db.count_users()
+            await notify_owner(
+                message.bot,
+                texts.owner_new_user(user_line(user), total),
+            )
+        except Exception:
+            pass
+
     bot_info = await message.bot.me()
     await message.answer(
         texts.welcome(message.from_user.first_name or "trader", bot_info.username),

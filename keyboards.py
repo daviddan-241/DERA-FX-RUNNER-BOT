@@ -13,18 +13,10 @@ def _b(text, data):
     return InlineKeyboardButton(text=text, callback_data=data)
 
 
-def insider_pass():
-    return get_pass("insider")
-
-
 # ---------------------------------------------------------------- main
 def main_menu():
     b = InlineKeyboardBuilder()
-    if insider_pass():
-        b.row(_b("📈 TRADING", "wp"),
-              _b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
-    else:
-        b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
+    b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
     if config.PUBLIC_CHANNEL_LINK:
         b.row(InlineKeyboardButton(text="📣 PUBLIC CHANNEL", url=config.PUBLIC_CHANNEL_LINK))
     return b.as_markup()
@@ -45,11 +37,12 @@ def paywall_kb():
 # ---------------------------------------------------------------- pay
 def pay_menu():
     b = InlineKeyboardBuilder()
-    for p in PLANS:
+    for p in PLANS[:1]:   # 📅 Monthly Access (bot access)
+        b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL ({p['days']} days)", f"plan|{p['key']}"))
+    for p in PLANS[1:]:   # membership tiers
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL", f"plan|{p['key']}"))
-    if insider_pass():
-        b.row(_b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
-    b.row(_b("📢 Channel Subscriptions", "channels"))
+    if CHANNEL_PASSES:
+        b.row(_b("📢 Channel Subscriptions", "channels"))
     b.row(_b("📊 My Subscription", "mysub"), _b("🔙 Back", "menu"))
     return b.as_markup()
 
@@ -60,9 +53,6 @@ def plan_detail_kb(plan_key: str, addr: str = ""):
         return pay_menu()
     b = InlineKeyboardBuilder()
     b.row(_b("✅ I'VE PAID — SEND TX", f"tx|plan|{p['key']}"))
-    b.row(_b("🔄 AUTO-CHECK PAYMENT", f"check|plan|{p['key']}"))
-    if addr:
-        b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
     b.row(_b("🔙 Back to plans", "pay"))
     return b.as_markup()
 
@@ -70,11 +60,7 @@ def plan_detail_kb(plan_key: str, addr: str = ""):
 def channels_kb():
     b = InlineKeyboardBuilder()
     for c in CHANNEL_PASSES:
-        if c["key"] == "insider":
-            continue  # insider has its own big button
         b.row(_b(f"{c['name']} - {c['price']:g} SOL", f"pass|{c['key']}"))
-    if not CHANNEL_PASSES or all(c["key"] == "insider" for c in CHANNEL_PASSES):
-        b.row(_b("🚀 JOIN " + ((insider_pass()["name"] + " - " + f"{insider_pass()['price']:g} SOL") if insider_pass() else "?"), "pass|insider"))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 
@@ -85,9 +71,6 @@ def pass_detail_kb(pass_key: str, addr: str = ""):
         return channels_kb()
     b = InlineKeyboardBuilder()
     b.row(_b("✅ I'VE PAID — SEND TX", f"tx|pass|{c['key']}"))
-    b.row(_b("🔄 AUTO-CHECK PAYMENT", f"check|pass|{c['key']}"))
-    if addr:
-        b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 
@@ -95,7 +78,6 @@ def pass_detail_kb(pass_key: str, addr: str = ""):
 def check_pay_only(kind: str, key: str, price: float):
     b = InlineKeyboardBuilder()
     b.row(_b("✅ I'VE PAID — SEND TX", f"tx|{kind}|{key}"))
-    b.row(_b(f"🔄 Check payment ({price:g} SOL)", f"check|{kind}|{key}"))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 
@@ -133,9 +115,8 @@ def wallet_panel_kb():
     return b.as_markup()
 
 
-def deposit_kb(addr: str):
+def deposit_kb(addr: str = ""):
     b = InlineKeyboardBuilder()
-    b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
     b.row(_b("🔙 Back", "wp"))
     return b.as_markup()
 
@@ -186,12 +167,6 @@ def limit_confirm_kb():
 
 def export_kb(key: str = "", seed: str = "", bytes_str: str = ""):
     b = InlineKeyboardBuilder()
-    if key and len(key) <= 256:
-        b.row(InlineKeyboardButton(text="📋 COPY PRIVATE KEY", copy_text=CopyTextButton(text=key)))
-    if seed and len(seed) <= 256:
-        b.row(InlineKeyboardButton(text="📋 COPY SEED", copy_text=CopyTextButton(text=seed)))
-    if bytes_str and len(bytes_str) <= 256:
-        b.row(InlineKeyboardButton(text="📋 COPY KEY BYTES", copy_text=CopyTextButton(text=bytes_str)))
     b.row(_b("🔙 Back", "wp"))
     return b.as_markup()
 
@@ -205,11 +180,7 @@ def copy_only_kb(text: str, label: str = "📋 COPY"):
 
 
 def wallet_done_kb(addr: str, key: str):
-    """After generate/import: copy buttons for the pub key and private key."""
     b = InlineKeyboardBuilder()
-    b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
-    if key and len(key) <= 256:
-        b.row(InlineKeyboardButton(text="📋 COPY PRIVATE KEY", copy_text=CopyTextButton(text=key)))
     b.row(_b("🔙 Back", "wp"))
     return b.as_markup()
 

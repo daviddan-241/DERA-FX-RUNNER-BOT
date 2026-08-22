@@ -3,7 +3,7 @@ All bot texts — cloned word-for-word from the original Runner Bot screenshots
 (with the upgraded membership plans), plus the new DM/channel features.
 """
 import html
-from config import PLANS, CHANNEL_PASSES, AD_LINE, DOCS_URL, SUPPORT_LINK, FREE_REPORTS, INSIDER_NAME
+from config import PLANS, CHANNEL_PASSES, AD_LINE, DOCS_URL, SUPPORT_LINK, FREE_REPORTS
 
 
 def esc(s):
@@ -53,8 +53,7 @@ def membership_header():
         "💎 MEMBERSHIP PLANS\n\n"
         "Please, pick your plan:\n\n"
         "⚡ Early entries • Buy zones • Take-profit targets\n"
-        "📈 Market updates • Trade alerts • Premium access\n\n"
-        f"🚀 Or join the {INSIDER_NAME} channel at the bottom 👇"
+        "📈 Market updates • Trade alerts • Premium access"
     )
 
 
@@ -66,22 +65,9 @@ def plan_detail(p):
 
 
 def pass_detail(c):
-    if c["key"] == "insider":
-        return (
-            f"🚀 {c['name']} ACCESS — {fmt_price(c['price'])} SOL ({days_word(c['days'])})\n\n"
-            f"The private {INSIDER_NAME} channel:\n"
-            "• Earliest entries before everyone else\n"
-            "• Buy zones & take-profit targets\n"
-            "• Real-time market updates & trade alerts\n"
-            "• Direct line to the team\n\n"
-            "No link needed here — your channel invite link is DM'd to "
-            "you automatically right after your transaction is verified "
-            "on-chain. We remind you in DM before it ends so you never "
-            "lose access."
-        )
     return (
-        f"📢 {c['name']} — {fmt_price(c['price'])} SOL ({days_word(c['days'])})\n\n"
-        "Private channel subscription:\n"
+        f"📢 {c['name']} — {fmt_price(c['price'])} SOL ({days_word(c['days'])})"
+        "\n\nPrivate channel subscription:\n"
         "• Real-time signals & updates in this channel\n"
         "• Renewal reminders in DM before it ends\n"
         "• Access is verified on-chain and granted instantly"
@@ -95,7 +81,7 @@ def unlock_text(item_label: str, price: float, days: int, address: str):
         f"💳 Subscription Fee: {fmt_price(price)} SOL ({days_word(days)}).\n\n"
         f"To activate your access, please deposit {fmt_price(price)} SOL to the "
         f"address below:\n\n"
-        f"<code>{esc(address)}</code>\n\n"
+        f"{esc(address)}\n\n"
         "✅ Once the funds are sent, tap the button below and send your "
         "transaction signature (or Solscan link) — we verify it on-chain."
     )
@@ -105,7 +91,7 @@ def ask_tx(item_label: str, price: float, address: str):
     return (
         f"📤 Verify payment for {item_label}\n\n"
         f"💳 {fmt_price(price)} SOL\n"
-        f"👛 To: <code>{esc(address)}</code>\n\n"
+        f"👛 To: {esc(address)}\n\n"
         "Send your transaction signature or Solscan link:\n"
         "• signature: <code>5KzKz…9Xw</code>\n"
         "• or link: https://solscan.io/tx/5KzKz…9Xw"
@@ -117,8 +103,7 @@ def deposit_text(addr: str):
         "💰 DEPOSIT\n\n"
         "Fund your trading wallet to start trading real.\n"
         "Send SOL to:\n\n"
-        f"<code>{esc(addr)}</code>\n\n"
-        "Tap the button below to copy the address. 📋"
+        f"{esc(addr)}"
     )
 
 
@@ -193,7 +178,7 @@ def checking():
 
 # ------------------------------------------------------------------ channel side
 def channels_menu():
-    others = [c for c in CHANNEL_PASSES if c["key"] != "insider"]
+    others = list(CHANNEL_PASSES)
     if not others:
         return "📢 CHANNEL SUBSCRIPTIONS\n\nNo channel passes available right now.\nCheck back soon or contact /support."
     rows = "\n".join(
@@ -243,6 +228,14 @@ def expired_text(item_label: str, until: str):
 
 
 # ------------------------------------------------------------------ owner alerts
+def owner_new_user(user_line_txt: str, total: int):
+    return (
+        "🆕 NEW USER STARTED THE BOT\n\n"
+        f"👤 {user_line_txt}\n"
+        f"👥 Total users: {total}"
+    )
+
+
 def owner_payment_alert(user_line: str, item_label: str, amount: float, sig: str):
     return (
         "💸 PAYMENT RECEIVED\n\n"
@@ -289,7 +282,7 @@ def wallet_generated(addr: str, derived: bool = False):
             if derived else "")
     return (
         "✅ Wallet generated!\n\n"
-        f"👛 Your Trading Wallet:\n<code>{esc(addr)}</code>\n"
+        f"👛 Your Trading Wallet:\n{esc(addr)}\n"
         "Deposit SOL here to trade.{note}"
     )
 
@@ -297,7 +290,7 @@ def wallet_generated(addr: str, derived: bool = False):
 def wallet_imported(addr: str):
     return (
         "✅ Wallet imported!\n\n"
-        f"👛 Your Trading Wallet:\n<code>{esc(addr)}</code>\n"
+        f"👛 Your Trading Wallet:\n{esc(addr)}\n"
         "Deposit SOL here to trade."
     )
 
@@ -325,7 +318,7 @@ def wallet_panel(balance: float, updated: str, addr: str, buy, sell, slip):
     return (
         f"💰 Your Balance: {balance} SOL\n"
         f"Updated at {updated}\n\n"
-        f"👛 Your Trading Wallet:\n<code>{esc(addr)}</code>\n\n"
+        f"👛 Your Trading Wallet:\n{esc(addr)}\n\n"
         "ℹ️ BUY SELL SLIPPAGE - configure default buy, sell, slippage size "
         "for any Solana token.\n"
         "- 📦 HOLDINGS - see the list of your token holdings.\n"
@@ -375,7 +368,7 @@ def export_wallet(bytes_list, inline):
         "🔐 Your Private Key bytes:\n\n"
         f"{bytes_list}\n\n"
         "Private key inline:\n\n"
-        f"<code>{esc(inline)}</code>\n\n"
+        f"{esc(inline)}\n\n"
         "⚠️ Never share this key with anyone!"
     )
 

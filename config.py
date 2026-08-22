@@ -80,7 +80,7 @@ def _i(name, default):
 #  reports after the 3 free trials (like the original bot's month plan).
 # ---------------------------------------------------------------------
 BOT_MONTH_NAME = os.getenv("BOT_MONTH_NAME", "Monthly Access").strip()
-BOT_MONTH_PRICE = float(os.getenv("BOT_MONTH_PRICE", "2"))
+BOT_MONTH_PRICE = float(os.getenv("BOT_MONTH_PRICE", "5"))
 BOT_MONTH_DAYS = int(os.getenv("BOT_MONTH_DAYS", "30"))
 
 PLANS = [
@@ -204,24 +204,6 @@ def parse_passes(raw: str):
 
 
 CHANNEL_PASSES = parse_passes(os.getenv("CHANNEL_PASSES", ""))
-
-# ---------------------------------------------------------------------
-#  🚀 INSIDER — the dedicated "Join Insider" channel pass (its own price
-#  & duration; shows as a big button right under the membership plans).
-# ---------------------------------------------------------------------
-INSIDER_NAME = os.getenv("INSIDER_NAME", "Private Alpha").strip()
-INSIDER_PRICE = float(os.getenv("INSIDER_PRICE", "5"))
-INSIDER_DAYS = int(os.getenv("INSIDER_DAYS", "30"))
-INSIDER_CHANNEL_ID = os.getenv("INSIDER_CHANNEL_ID", "").strip()
-
-if INSIDER_PRICE > 0:
-    CHANNEL_PASSES.insert(0, {
-        "key": "insider",
-        "name": INSIDER_NAME,
-        "channel_id": INSIDER_CHANNEL_ID,
-        "price": INSIDER_PRICE,
-        "days": INSIDER_DAYS,
-    })
 
 # Max attempts to execute a limit order before cancelling it.
 LIMIT_MAX_ATTEMPTS = int(os.getenv("LIMIT_MAX_ATTEMPTS", "3"))

@@ -42,7 +42,7 @@ async def _detail_text(item, kind: str) -> str:
         label = f"{item['emoji']} {item['name']}"
         detail = texts.plan_detail(item)
     else:
-        label = item['name'] if item["key"] != "insider" else config.INSIDER_NAME
+        label = item['name']
         detail = texts.pass_detail(item)
     addr = await get_treasury_address()
     if addr:

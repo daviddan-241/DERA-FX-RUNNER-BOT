@@ -65,6 +65,7 @@ async def main():
         print("⚠️ OWNER_ID is 0 — admin commands and admin DMs are disabled "
               "until you set your Telegram ID in .env.")
     await db.init_db()
+    log.info("Database engine: %s", "postgresql" if db.ENGINE == "postgres" else "sqlite")
 
     bot = Bot(token=config.BOT_TOKEN)
     dp = build_dispatcher()

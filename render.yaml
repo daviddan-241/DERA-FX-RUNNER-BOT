@@ -22,6 +22,8 @@ services:
         sync: false
       - key: WALLET_SEED
         sync: false
+      - key: DATABASE_URL
+        sync: false
       - key: RPC_URL
         value: https://api.mainnet-beta.solana.com
       - key: MIN_CONFIRM_LEVEL
@@ -47,15 +49,9 @@ services:
       - key: BOT_MONTH_NAME
         value: Monthly Access
       - key: BOT_MONTH_PRICE
-        value: "2"
+        value: "5"
       - key: BOT_MONTH_DAYS
         value: "30"
-      - key: INSIDER_PRICE
-        value: "5"
-      - key: INSIDER_DAYS
-        value: "30"
-      - key: INSIDER_CHANNEL_ID
-        sync: false
       - key: CHANNEL_PASSES
         sync: false
       - key: SUPPORT_LINK
