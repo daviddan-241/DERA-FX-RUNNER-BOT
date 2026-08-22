@@ -432,6 +432,18 @@ async def reduce_position(user_id: int, mint: str, sold_qty: float) -> bool:
         return True
 
 
+# ------------------------------------------------------------------ clear trades
+async def clear_user_trades(user_id: int):
+    """Drop positions and cancel open limit orders (used when a user
+    replaces their trading wallet)."""
+    async with aiosqlite.connect(DB_PATH) as db:
+        await db.execute("DELETE FROM positions WHERE user_id=?", (user_id,))
+        await db.execute(
+            "UPDATE limit_orders SET status='cancelled' WHERE user_id=? AND status='open'",
+            (user_id,))
+        await db.commit()
+
+
 # ------------------------------------------------------------------ limit orders
 async def create_limit_order(user_id: int, mint: str, symbol: str, side: str,
                              target_price: float, amount: float, slippage_bps: int) -> int:

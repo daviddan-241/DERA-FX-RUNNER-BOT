@@ -69,6 +69,28 @@ async def main():
     bot = Bot(token=config.BOT_TOKEN)
     dp = build_dispatcher()
 
+    # real command list in the "/" menu (like the original bot)
+    from aiogram.types import BotCommand
+    try:
+        await bot.set_my_commands([
+            BotCommand(command="start", description="Start the bot"),
+            BotCommand(command="top", description="Get a SMART holders report"),
+            BotCommand(command="kols", description="Get KOLs report for this CA"),
+            BotCommand(command="dev", description="Get a dev report (bought, sold, holding)"),
+            BotCommand(command="full", description="Get a full report: dev, KOLs & holders"),
+            BotCommand(command="pay", description="Payment and plan upgrade"),
+            BotCommand(command="trading", description="Trading settings (buy, sell, slippage, wallet)"),
+            BotCommand(command="holdings", description="Tokens on your balance"),
+            BotCommand(command="positions", description="Your open positions with live PnL"),
+            BotCommand(command="limit", description="Set a limit order (auto-executes)"),
+            BotCommand(command="withdraw", description="Withdraw tokens from your trading wallet"),
+            BotCommand(command="ref", description="Generate ref link, manage referrals"),
+            BotCommand(command="help", description="Docs and guide"),
+            BotCommand(command="support", description="Contact us for support / feedback"),
+        ])
+    except Exception as e:
+        log.warning("set_my_commands failed: %s", e)
+
     # health endpoint (Render web service + UptimeRobot keep-alive)
     start_health_server()
 

@@ -99,6 +99,18 @@ def user_line(user: dict) -> str:
     return f"{uname} (id {user['id']})"
 
 
+def parse_tx_ref(text: str):
+    """Extract a transaction signature from raw text, a Solscan/Explorer/Solana.fm
+    link, or a t.me link. Returns the signature or None."""
+    import re
+    text = (text or "").strip()
+    # bare signature
+    m = re.search(r"[1-9A-HJ-NP-Za-km-z]{87,88}", text)
+    if m:
+        return m.group(0)
+    return None
+
+
 async def ensure_wallet(msg, user_id: int):
     """Return the user if they have a trading wallet, else send the
     GENERATE/IMPORT prompt and return None. Used everywhere on the trade side."""

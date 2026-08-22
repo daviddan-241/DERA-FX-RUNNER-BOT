@@ -45,10 +45,19 @@ python bot.py
   array] | seed phrase>` or `/importwallet` in the bot's DM. Only needed if
   you want automatic referral-credit payouts.
 
-Payments are real on-chain SOL transfers: the bot scans the receiving
-address's latest transactions for a matching amount, verifies it's
-finalized/recent/not already used, then activates the subscription and DMs
-the channel invite link.
+Payments are real on-chain SOL transfers, verified **two ways**:
+
+- **SEND TX (main flow):** after sending the SOL, the user taps
+  `✅ I'VE PAID — SEND TX` and pastes their **transaction signature or
+  Solscan link**. The bot checks that exact transaction: correct receiving
+  address, amount ≥ price, success status, recent, and never used before —
+  then activates the subscription instantly.
+- **AUTO-CHECK:** the bot also scans the receiving address's latest
+  transactions as a fallback.
+
+Either way, once verified the bot grants access, DMs the channel invite link,
+schedules expiry reminders and credits the referrer. Every address on the
+payment screens has a **📋 COPY** button (tap-to-copy).
 
 ## 3. User wallets (GENERATE or IMPORT)
 
@@ -103,6 +112,11 @@ shows as a free 📣 button in the main menu and welcome message.
 
 ## 5. Trading (real)
 
+- **Wallet setup:** first time on the trade side → **GENERATE** or **IMPORT**
+  (seed phrase / key / byte array). Generated wallets are derived from your
+  `WALLET_SEED`; imported ones replace the current wallet (positions/limits
+  are cleared). The panel keeps **💰 DEPOSIT** (copyable address to fund the
+  wallet) and **📥 IMPORT WALLET** available at any time.
 - **Reports** `/top` `/kols` `/dev` `/full` — real DEXScreener + on-chain data
   with real BUY/SELL buttons underneath.
 - **BUY/SELL** execute actual swaps through **Jupiter** from the user's wallet.

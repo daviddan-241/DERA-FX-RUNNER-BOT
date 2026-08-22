@@ -19,13 +19,11 @@ def days_word(days):
 
 
 # ------------------------------------------------------------------ start
-def welcome(name: str, bot_username: str, public_link: str = ""):
+def welcome(name: str, bot_username: str):
     plans = "\n".join(f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL" for p in PLANS)
-    pub = f"\n📣 Public channel: {public_link}" if public_link else ""
     return (
         f"Welcome, {esc(name)}!\n"
-        "The Private Alpha Bot is ready 🚀\n"
-        f"{pub}\n\n"
+        "The Private Alpha Bot is ready 🚀\n\n"
         "The list of commands:\n\n"
         "📊 /top [contract address] - Get a SMART token holders report\n"
         "👤 /kols [contract address] - Get KOLs report for this CA\n"
@@ -97,8 +95,29 @@ def unlock_text(item_label: str, price: float, days: int, address: str):
         f"To activate your access, please deposit {fmt_price(price)} SOL to the "
         f"address below:\n\n"
         f"<code>{esc(address)}</code>\n\n"
-        "✅ Once the funds are sent, click the Check payment button below to "
-        "confirm your payment."
+        "✅ Once the funds are sent, tap the button below and send your "
+        "transaction signature (or Solscan link) — we verify it on-chain."
+    )
+
+
+def ask_tx(item_label: str, price: float, address: str):
+    return (
+        f"📤 Verify payment for {item_label}\n\n"
+        f"💳 {fmt_price(price)} SOL\n"
+        f"👛 To: <code>{esc(address)}</code>\n\n"
+        "Send your transaction signature or Solscan link:\n"
+        "• signature: <code>5KzKz…9Xw</code>\n"
+        "• or link: https://solscan.io/tx/5KzKz…9Xw"
+    )
+
+
+def deposit_text(addr: str):
+    return (
+        "💰 DEPOSIT\n\n"
+        "Fund your trading wallet to start trading real.\n"
+        "Send SOL to:\n\n"
+        f"<code>{esc(addr)}</code>\n\n"
+        "Tap the button below to copy the address. 📋"
     )
 
 

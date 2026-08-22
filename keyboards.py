@@ -2,7 +2,7 @@
 All inline keyboards — cloned button-for-button from the original bot,
 plus the membership / insider / channel / trading upgrades.
 """
-from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.types import CopyTextButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import PLANS, CHANNEL_PASSES, get_plan, get_pass
@@ -23,10 +23,8 @@ def main_menu():
     b.row(_b("📈 TRADING", "wp"), _b("💳 PAY", "pay"))
     if insider_pass():
         b.row(_b(f"🚀 JOIN {insider_pass()['name']} - {insider_pass()['price']:g} SOL", "pass|insider"))
-    b.row(_b("📢 CHANNELS", "channels"), _b("📊 MY SUB", "mysub"))
     if config.PUBLIC_CHANNEL_LINK:
         b.row(InlineKeyboardButton(text="📣 PUBLIC CHANNEL", url=config.PUBLIC_CHANNEL_LINK))
-    b.row(_b("❓ HELP", "help"), _b("🛟 SUPPORT", "support"))
     return b.as_markup()
 
 
@@ -42,12 +40,15 @@ def pay_menu():
     return b.as_markup()
 
 
-def plan_detail_kb(plan_key: str):
+def plan_detail_kb(plan_key: str, addr: str = ""):
     p = get_plan(plan_key)
     if not p:
         return pay_menu()
     b = InlineKeyboardBuilder()
-    b.row(_b(f"✅ Check payment ({p['price']:g} SOL)", f"check|plan|{p['key']}"))
+    b.row(_b("✅ I'VE PAID — SEND TX", f"tx|plan|{p['key']}"))
+    b.row(_b("🔄 AUTO-CHECK PAYMENT", f"check|plan|{p['key']}"))
+    if addr:
+        b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
     b.row(_b("🔙 Back to plans", "pay"))
     return b.as_markup()
 
@@ -64,19 +65,23 @@ def channels_kb():
     return b.as_markup()
 
 
-def pass_detail_kb(pass_key: str):
+def pass_detail_kb(pass_key: str, addr: str = ""):
     c = get_pass(pass_key)
     if not c:
         return channels_kb()
     b = InlineKeyboardBuilder()
-    b.row(_b(f"✅ Check payment ({c['price']:g} SOL)", f"check|pass|{c['key']}"))
+    b.row(_b("✅ I'VE PAID — SEND TX", f"tx|pass|{c['key']}"))
+    b.row(_b("🔄 AUTO-CHECK PAYMENT", f"check|pass|{c['key']}"))
+    if addr:
+        b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 
 
 def check_pay_only(kind: str, key: str, price: float):
     b = InlineKeyboardBuilder()
-    b.row(_b(f"✅ Check payment ({price:g} SOL)", f"check|{kind}|{key}"))
+    b.row(_b("✅ I'VE PAID — SEND TX", f"tx|{kind}|{key}"))
+    b.row(_b(f"🔄 Check payment ({price:g} SOL)", f"check|{kind}|{key}"))
     b.row(_b("🔙 Back", "pay"))
     return b.as_markup()
 
@@ -108,8 +113,16 @@ def wallet_panel_kb():
     b.row(_b("🟢 BUY", "setbuy"), _b("🔴 SELL", "setsell"), _b("⚙️ SLIPPAGE", "setslip"))
     b.row(_b("📦 HOLDINGS", "holdings"), _b("💼 POSITIONS", "positions"))
     b.row(_b("⏳ LIMIT ORDERS", "limits"), _b("🔑 EXPORT WALLET", "export"))
+    b.row(_b("💰 DEPOSIT", "deposit"), _b("📥 IMPORT WALLET", "wimp"))
     b.row(_b("🔄 REFRESH", "refresh"), _b("💸 WITHDRAW", "withdraw"))
     b.row(_b("🔙 Menu", "menu"))
+    return b.as_markup()
+
+
+def deposit_kb(addr: str):
+    b = InlineKeyboardBuilder()
+    b.row(InlineKeyboardButton(text="📋 COPY ADDRESS", copy_text=CopyTextButton(text=addr)))
+    b.row(_b("🔙 Back", "wp"))
     return b.as_markup()
 
 
@@ -157,8 +170,10 @@ def limit_confirm_kb():
     return b.as_markup()
 
 
-def export_kb():
+def export_kb(key: str = ""):
     b = InlineKeyboardBuilder()
+    if key:
+        b.row(InlineKeyboardButton(text="📋 COPY KEY", copy_text=CopyTextButton(text=key)))
     b.row(_b("🔙 Back", "wp"))
     return b.as_markup()
 

@@ -1,9 +1,11 @@
 """Payment & subscriptions: membership plans, channel passes, real on-chain
-verification, access granting, DM expiry reminders data, referral credits."""
+verification (send TX or auto-check), access granting, referral credits."""
 import asyncio
 
 from aiogram import F, Router
 from aiogram.filters import Command
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, Message
 
 import config
@@ -12,17 +14,19 @@ import keyboards as kb
 import solana
 import texts
 from utils import (effective_channel_id, fmt_ts, get_treasury_address,
-                   grant_channel, notify_owner, now, user_line)
+                   grant_channel, notify_owner, now, parse_tx_ref, user_line)
 
 router = Router()
+
+
+class PayStates(StatesGroup):
+    tx_input = State()
 
 
 # ------------------------------------------------------------------ menus
 @router.message(Command("pay"))
 async def cmd_pay(message: Message):
-    await message.answer(
-        texts.membership_header(), reply_markup=kb.pay_menu()
-    )
+    await message.answer(texts.membership_header(), reply_markup=kb.pay_menu())
 
 
 @router.callback_query(F.data == "pay")
@@ -38,13 +42,13 @@ async def _detail_text(item, kind: str) -> str:
         label = f"{item['emoji']} {item['name']}"
         detail = texts.plan_detail(item)
     else:
-        label = item['name'] if item["key"] != "insider" else "INSIDER"
+        label = item['name'] if item["key"] != "insider" else config.INSIDER_NAME
         detail = texts.pass_detail(item)
     addr = await get_treasury_address()
     if addr:
         detail += "\n\n" + texts.unlock_text(label, item["price"], item["days"], addr)
     else:
-        detail += "\n\n⚠️ Payment wallet is not set up yet — contact /support."
+        detail += "\n\n⚠️ Payment address is not set up yet — contact /support."
     return detail
 
 
@@ -55,8 +59,9 @@ async def cb_plan(query: CallbackQuery):
     plan = config.get_plan(key)
     if not plan:
         return
+    addr = await get_treasury_address()
     await query.message.answer(await _detail_text(plan, "plan"),
-                               reply_markup=kb.plan_detail_kb(key))
+                               reply_markup=kb.plan_detail_kb(key, addr))
 
 
 @router.callback_query(F.data == "channels")
@@ -72,24 +77,26 @@ async def cb_pass(query: CallbackQuery):
     c = config.get_pass(key)
     if not c:
         return
+    addr = await get_treasury_address()
     await query.message.answer(await _detail_text(c, "pass"),
-                               reply_markup=kb.pass_detail_kb(key))
+                               reply_markup=kb.pass_detail_kb(key, addr))
 
 
 @router.callback_query(F.data.startswith("renew|"))
 async def cb_renew(query: CallbackQuery):
     await query.answer()
     _, kind, key = query.data.split("|", 2)
+    addr = await get_treasury_address()
     if kind == "plan":
         plan = config.get_plan(key)
         if plan:
             await query.message.answer(await _detail_text(plan, "plan"),
-                                       reply_markup=kb.plan_detail_kb(key))
+                                       reply_markup=kb.plan_detail_kb(key, addr))
     else:
         c = config.get_pass(key)
         if c:
             await query.message.answer(await _detail_text(c, "pass"),
-                                       reply_markup=kb.pass_detail_kb(key))
+                                       reply_markup=kb.pass_detail_kb(key, addr))
 
 
 # ------------------------------------------------------------------ my subscription
@@ -136,15 +143,89 @@ async def _show_mysub(msg):
     )
 
 
-# ------------------------------------------------------------------ unlock & check payment
+def _item_of(kind: str, key: str):
+    return config.get_plan(key) if kind == "plan" else config.get_pass(key)
+
+
+# ------------------------------------------------------------------ payment: send TX (real verification)
+@router.callback_query(F.data.startswith("tx|"))
+async def cb_tx_payment(query: CallbackQuery, state: FSMContext):
+    await query.answer()
+    _, kind, key = query.data.split("|", 2)
+    item = _item_of(kind, key)
+    if not item:
+        return
+    address = await get_treasury_address()
+    if not address:
+        await query.message.answer(texts.no_treasury())
+        return
+    await state.set_state(PayStates.tx_input)
+    await state.update_data(tx_kind=kind, tx_key=key)
+    label = f"{item['emoji']} {item['name']}" if kind == "plan" else item['name']
+    await query.message.answer(texts.ask_tx(label, item["price"], address))
+
+
+@router.message(PayStates.tx_input)
+async def got_tx(message: Message, state: FSMContext):
+    data = await state.get_data()
+    kind, key = data.get("tx_kind"), data.get("tx_key")
+    await state.clear()
+    item = _item_of(kind, key)
+    if not item:
+        return
+
+    address = await get_treasury_address()
+    if not address:
+        await message.answer(texts.no_treasury())
+        return
+
+    sig = parse_tx_ref(message.text or "")
+    if not sig:
+        await message.answer(
+            "❌ That doesn't look like a transaction.\n\n"
+            "Send the transaction signature or a Solscan link, e.g.:\n"
+            "https://solscan.io/tx/5KzKz…9Xw",
+            reply_markup=kb.check_pay_only(kind, key, item["price"]))
+        return
+
+    await message.answer(texts.checking())
+    used = await db.payment_sigs()
+    if sig in used:
+        await message.answer(
+            "⚠️ That transaction was already used for another payment.\n"
+            "If this is a mistake, contact us via /support with your tx signature.")
+        return
+
+    res = await asyncio.to_thread(solana.verify_single_tx, sig, address)
+    min_ts = now() - config.TX_WINDOW_HOURS * 3600
+    if not res or not res.get("ok"):
+        await message.answer(
+            texts.payment_failed(item["price"]),
+            reply_markup=kb.check_pay_only(kind, key, item["price"]))
+        return
+    if (res.get("ts") or 0) and res["ts"] < min_ts:
+        await message.answer(
+            "⛔ That transaction is too old to verify.\n"
+            f"Payments must be within the last {config.TX_WINDOW_HOURS} hours.",
+            reply_markup=kb.check_pay_only(kind, key, item["price"]))
+        return
+    lamports = res.get("lamports") or 0
+    if lamports < solana.sol_to_lam(item["price"]):
+        await message.answer(
+            texts.payment_failed(item["price"]),
+            reply_markup=kb.check_pay_only(kind, key, item["price"]))
+        return
+
+    await _finalize_payment(message.bot, message, message.from_user.id,
+                            kind, item, sig, lamports, res.get("payer", ""))
+
+
+# ------------------------------------------------------------------ payment: auto-check (scan fallback)
 @router.callback_query(F.data.startswith("check|"))
 async def cb_check_payment(query: CallbackQuery):
     await query.answer()
     _, kind, key = query.data.split("|", 2)
-    if kind == "plan":
-        item = config.get_plan(key)
-    else:
-        item = config.get_pass(key)
+    item = _item_of(kind, key)
     if not item:
         return
 
@@ -159,69 +240,62 @@ async def cb_check_payment(query: CallbackQuery):
     if not result:
         await query.message.answer(
             texts.payment_failed(item["price"]),
-            reply_markup=kb.check_pay_only(kind, key, item["price"]),
-        )
+            reply_markup=kb.check_pay_only(kind, key, item["price"]))
         return
 
     sig, lamports, payer = result
+    await _finalize_payment(query.message.bot, query.message, query.from_user.id,
+                            kind, item, sig, lamports, payer)
+
+
+async def _finalize_payment(bot, msg: Message, user_id: int, kind: str, item: dict,
+                            sig: str, lamports: int, payer: str):
+    """Shared: record payment, grant channel, create subscription, notify."""
     label = f"{item['emoji']} {item['name']}" if kind == "plan" else f"📢 {item['name']}"
 
-    # record the payment (unique tx signature — nobody can reuse a tx)
-    ok = await db.register_payment(sig, query.from_user.id, label, lamports, payer)
+    ok = await db.register_payment(sig, user_id, label, lamports, payer)
     if not ok:
-        await query.message.answer(
+        await msg.answer(
             "⚠️ That transaction was already used for another payment.\n"
             "If this is a mistake, contact us via /support with your tx signature.")
         return
 
-    # grant channel access (env id or /setchannel id)
     channels = []
     cid = await effective_channel_id(item)
     if cid:
         channels = [cid]
     links = []
     for cid in channels:
-        link = await grant_channel(query.message.bot, cid, query.from_user.id)
+        link = await grant_channel(bot, cid, user_id)
         if link:
             links.append(link)
     links_block = "\n".join(f"🔗 {l}" for l in links)
 
     sub = await db.add_subscription(
-        user_id=query.from_user.id,
-        kind=kind,
-        item_key=item["key"],
-        label=label,
-        lamports=lamports,
-        days=item["days"],
-        tx_sig=sig,
-        payer=payer,
+        user_id=user_id, kind=kind, item_key=item["key"], label=label,
+        lamports=lamports, days=item["days"], tx_sig=sig, payer=payer,
         invite_link="\n".join(links),
         channel_id=channels[0] if channels else "",
     )
     end_str = "∞ (Lifetime 🚀)" if not sub["end_ts"] else fmt_ts(sub["end_ts"])
-    await query.message.answer(
+    await msg.answer(
         texts.payment_success(label, lamports / 1e9, item["days"], end_str, links_block),
         reply_markup=kb.main_menu(),
         link_preview_options={"is_disabled": True},
     )
 
-    # owner alert
-    user = await db.get_user(query.from_user.id)
-    await notify_owner(
-        query.message.bot,
-        texts.owner_payment_alert(user_line(user), label, lamports / 1e9, sig),
-    )
+    user = await db.get_user(user_id)
+    await notify_owner(bot, texts.owner_payment_alert(user_line(user), label,
+                                                      lamports / 1e9, sig))
 
-    # referral credit (50% back to the referrer)
     if user and user.get("referred_by"):
         credit = int(lamports * config.REF_PERCENT / 100)
         if credit > 0:
             await db.add_credits(user["referred_by"], credit)
             try:
-                await query.message.bot.send_message(
+                await bot.send_message(
                     user["referred_by"],
-                    texts.ref_credit_alert(credit / 1e9, user_line(user)),
-                )
+                    texts.ref_credit_alert(credit / 1e9, user_line(user)))
             except Exception:
                 pass
 

