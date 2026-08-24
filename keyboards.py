@@ -217,11 +217,8 @@ def back_to_wallet():
 
 
 # ---------------------------------------------------------------- wallet setup
-def wallet_setup_kb():
-    b = InlineKeyboardBuilder()
-    b.row(_b("🆕 GENERATE WALLET", "wgen"))
-    b.row(_b("📥 IMPORT WALLET", "wimp"))
-    return b.as_markup()
+# (removed — the GENERATE/IMPORT gate is gone; wallets auto-generate and
+#  IMPORT is a button inside the trading panel keyboard above)
 
 
 # ---------------------------------------------------------------- reports

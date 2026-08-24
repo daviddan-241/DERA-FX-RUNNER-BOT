@@ -308,18 +308,10 @@ def _user_id(msg):
 
 async def _show_panel(msg, user_id=None):
     user_id = user_id or _user_id(msg)
+    # Auto-generates a wallet if the user has none (no GENERATE/IMPORT gate);
+    # on failure it already told the user — just stop here.
     user = await ensure_wallet(msg, user_id)
-    if user is None:
-        # Already prompted GENERATE/IMPORT; do not crash or show empty panel
-        return
-    # Treat empty wallet_pub as no wallet
-    if not user.get("wallet_pub"):
-        try:
-            await msg.answer(
-                texts.ask_wallet_choice(),
-                parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
-        except Exception:
-            pass
+    if user is None or not user.get("wallet_pub"):
         return
     try:
         balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])

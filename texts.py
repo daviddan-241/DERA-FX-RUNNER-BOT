@@ -277,15 +277,8 @@ def owner_channel_error(cid, msg):
 
 
 # ------------------------------------------------------------------ wallet setup (trade side)
-def ask_wallet_choice():
-    return (
-        "👛 WALLET SETUP\n\n"
-        "To use the trading side you need a Solana wallet.\n\n"
-        "🆕 GENERATE — the bot creates a wallet for you instantly.\n"
-        "📥 IMPORT — use your own wallet by sending its seed phrase "
-        "or private key.\n\n"
-        "Choose below 👇"
-    )
+# No GENERATE/IMPORT gate anymore: wallets auto-generate, IMPORT lives inside
+# the trading panel (see keyboards.wallet_panel_kb).
 
 
 def ask_import():
