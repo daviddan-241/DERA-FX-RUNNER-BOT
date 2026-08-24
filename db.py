@@ -178,12 +178,59 @@ CREATE INDEX IF NOT EXISTS idx_limits_status ON limit_orders(status);
 """
 
 
+# Columns the code expects in `users`. Old deployments may be missing some —
+# init_db() adds them idempotently so ensure_user()/set_wallet() never fail
+# with "column does not exist" on an existing Render Postgres/SQLite DB.
+USERS_COLUMNS = {
+    "username": "TEXT",
+    "first_name": "TEXT",
+    "wallet_priv": "TEXT",
+    "wallet_pub": "TEXT",
+    "free_used": "INTEGER DEFAULT 0",
+    "default_buy": "DOUBLE PRECISION",
+    "default_sell": "DOUBLE PRECISION",
+    "default_slippage": "DOUBLE PRECISION DEFAULT 10",
+    "ref_code": "TEXT",
+    "referred_by": "BIGINT",
+    "credits_lamports": "BIGINT DEFAULT 0",
+    "created_at": "BIGINT",
+}
+
+
+async def _migrate_users_columns(con_like=None):
+    """Add any missing users columns (idempotent, engine-specific)."""
+    import logging
+    log = logging.getLogger("runner")
+    if ENGINE == "postgres":
+        pool = await _pg()
+        async with pool.acquire() as con:
+            for col, typ in USERS_COLUMNS.items():
+                try:
+                    await con.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typ}')
+                except Exception as e:
+                    log.warning(f"migration: users.{col}: {e}")
+    else:
+        async with aiosqlite.connect(DB_PATH) as db:
+            cur = await db.execute("PRAGMA table_info(users)")
+            rows = await cur.fetchall()
+            have = {r[1] for r in rows} if rows else set()
+            for col, typ in USERS_COLUMNS.items():
+                if col not in have:
+                    try:
+                        await db.execute(f'ALTER TABLE users ADD COLUMN {col} {typ.replace("DOUBLE PRECISION", "REAL").replace("BIGINT", "INTEGER")}')
+                        await db.commit()
+                    except Exception as e:
+                        log.warning(f"migration: users.{col}: {e}")
+
+
 async def init_db():
     global _pg_pool
     if ENGINE == "postgres":
         pool = await _pg()
         async with pool.acquire() as con:
             await con.execute(SCHEMA_PG)
+        # Old Render databases may predate some columns — heal them (never drops data)
+        await _migrate_users_columns()
         # Force new connections after schema rebuild to avoid cached statement errors
         try:
             await pool.terminate()
@@ -194,6 +241,7 @@ async def init_db():
         async with aiosqlite.connect(DB_PATH) as db:
             await db.executescript(SCHEMA_SQLITE)
             await db.commit()
+        await _migrate_users_columns()
 
 
 async def _pg():

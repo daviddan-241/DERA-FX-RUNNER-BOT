@@ -72,11 +72,46 @@ async def cmd_start(message: Message, command: CommandObject):
                 "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
                 "default_buy": None, "default_sell": None, "default_slippage": 10.0}
 
-    # Wallet policy: /start only creates the user row. Wallet GENERATE / IMPORT
-    # happens when the user opens TRADING — never auto-generated or prompted here.
-    wallet_pub = user.get("wallet_pub") or ""
+    # Wallet policy: /start AUTO-GENERATES a real wallet for anyone who doesn't
+    # have one yet (derived from WALLET_SEED when set, otherwise random).
+    # Failures never block the welcome — TRADING's GENERATE/IMPORT is the fallback.
+    wallet_pub = (user.get("wallet_pub") or "").strip()
     wallet_priv = user.get("wallet_priv") or ""
     balance_sol = 0
+    generated_now = False
+    if not wallet_pub:
+        try:
+            import solana
+            derived = bool(config.WALLET_SEED)
+            last_err = None
+            for attempt in range(3):
+                try:
+                    if derived:
+                        kp = await asyncio.to_thread(
+                            solana.derive_user_keypair, config.WALLET_SEED, user_id)
+                    else:
+                        kp = await asyncio.to_thread(solana.new_keypair)
+                    await db.set_wallet(user_id, str(kp), str(kp.pubkey()))  # verified persist
+                    wallet_pub, wallet_priv = str(kp.pubkey()), str(kp)
+                    generated_now = True
+                    break
+                except Exception as e:
+                    last_err = e
+                    log.warning(f"cmd_start: wallet gen attempt {attempt+1} failed for {user_id}: {e}")
+                    await asyncio.sleep(0.5)
+            if generated_now:
+                # Tell the user their wallet is live (isolated — welcome already sent)
+                try:
+                    await message.answer(
+                        texts.wallet_generated(wallet_pub, derived=derived),
+                        parse_mode="HTML",
+                        reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
+                except Exception as e:
+                    log.warning(f"cmd_start: wallet message failed for {user_id}: {e}")
+            else:
+                log.error(f"cmd_start: wallet auto-generation failed for {user_id}: {last_err}")
+        except Exception as e:
+            log.error(f"cmd_start: wallet block failed for {user_id}: {e}", exc_info=True)
     if wallet_pub:
         try:
             import solana

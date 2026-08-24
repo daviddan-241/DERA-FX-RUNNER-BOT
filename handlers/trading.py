@@ -55,12 +55,26 @@ async def cb_wgen(query: CallbackQuery):
             await _show_panel(query.message, user_id=query.from_user.id)
             return
         derived = bool(config.WALLET_SEED)
-        if derived:
-            kp = await asyncio.to_thread(
-                solana.derive_user_keypair, config.WALLET_SEED, user["id"])
-        else:
-            kp = await asyncio.to_thread(solana.new_keypair)
-        await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
+        kp = None
+        last_err = None
+        for attempt in range(3):
+            try:
+                if derived:
+                    kp = await asyncio.to_thread(
+                        solana.derive_user_keypair, config.WALLET_SEED, user["id"])
+                else:
+                    kp = await asyncio.to_thread(solana.new_keypair)
+                await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))  # verified persist
+                break
+            except Exception as e:
+                last_err = e
+                log.warning(f"cb_wgen attempt {attempt+1} failed for {user['id']}: {e}")
+                await asyncio.sleep(0.5)
+        if kp is None:
+            log.error(f"cb_wgen: all attempts failed for {user['id']}: {last_err}")
+            await query.message.answer(
+                "⚠️ Couldn't save the wallet just now — tap GENERATE again.")
+            return
         # user chose GENERATE — cancel any stale IMPORT prompt flag
         try:
             await db.set_setting(f"awaiting_import:{user['id']}", "0")

@@ -49,7 +49,7 @@ def welcome(name: str, bot_username: str):
         "After that, unlock unlimited access with VIP Access.\n\n"
         "👥 50% ref back for every paid user — real SOL in your wallet.\n"
         "💎 Real on-chain payments. No auto-check. Send the TX.\n\n"
-        "👛 Open 📈 TRADING to generate or import a wallet, then deposit SOL to trade."
+        "👛 Open 📈 TRADING for your trading wallet, then deposit SOL to trade."
     )
 
 
