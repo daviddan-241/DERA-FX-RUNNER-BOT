@@ -61,6 +61,7 @@ async def cb_plan(query: CallbackQuery):
         return
     addr = await get_treasury_address()
     await query.message.answer(await _detail_text(plan, "plan"),
+                               parse_mode="HTML",
                                reply_markup=kb.plan_detail_kb(key, addr))
 
 
@@ -79,6 +80,7 @@ async def cb_pass(query: CallbackQuery):
         return
     addr = await get_treasury_address()
     await query.message.answer(await _detail_text(c, "pass"),
+                               parse_mode="HTML",
                                reply_markup=kb.pass_detail_kb(key, addr))
 
 
@@ -91,11 +93,13 @@ async def cb_renew(query: CallbackQuery):
         plan = config.get_plan(key)
         if plan:
             await query.message.answer(await _detail_text(plan, "plan"),
+                                       parse_mode="HTML",
                                        reply_markup=kb.plan_detail_kb(key, addr))
     else:
         c = config.get_pass(key)
         if c:
             await query.message.answer(await _detail_text(c, "pass"),
+                                       parse_mode="HTML",
                                        reply_markup=kb.pass_detail_kb(key, addr))
 
 

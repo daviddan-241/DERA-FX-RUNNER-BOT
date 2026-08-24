@@ -179,10 +179,17 @@ CREATE INDEX IF NOT EXISTS idx_limits_status ON limit_orders(status);
 
 
 async def init_db():
+    global _pg_pool
     if ENGINE == "postgres":
         pool = await _pg()
         async with pool.acquire() as con:
             await con.execute(SCHEMA_PG)
+        # Force new connections after schema rebuild to avoid cached statement errors
+        try:
+            await pool.terminate()
+        except Exception:
+            pass
+        _pg_pool = None
     else:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.executescript(SCHEMA_SQLITE)
@@ -281,20 +288,44 @@ def _is_dup(err) -> bool:
 # ------------------------------------------------------------------ users
 async def ensure_user(user_id: int, username: str = None, first_name: str = None,
                       referred_by: int = None) -> dict:
-    row = await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
-    if row is None:
-        code = f"{user_id:x}{''.join(random.choices(string.ascii_lowercase + string.digits, k=4))}"
+    try:
+        row = await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+        if row is None:
+            code = f"{user_id:x}{''.join(random.choices(string.ascii_lowercase + string.digits, k=4))}"
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    if ENGINE == "postgres":
+                        await _execute(
+                            "INSERT INTO users (id, username, first_name, ref_code, referred_by, created_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?) "
+                            "ON CONFLICT (id) DO UPDATE SET username = EXCLUDED.username, first_name = EXCLUDED.first_name, ref_code = EXCLUDED.ref_code, referred_by = EXCLUDED.referred_by, created_at = EXCLUDED.created_at",
+                            (user_id, username, first_name, code, referred_by, int(time.time())),
+                        )
+                    else:
+                        await _execute(
+                            "INSERT INTO users (id, username, first_name, ref_code, referred_by, created_at) "
+                            "VALUES (?, ?, ?, ?, ?, ?) "
+                            "ON CONFLICT(id) DO UPDATE SET username = EXCLUDED.username, first_name = EXCLUDED.first_name, ref_code = EXCLUDED.ref_code, referred_by = EXCLUDED.referred_by, created_at = EXCLUDED.created_at",
+                            (user_id, username, first_name, code, referred_by, int(time.time())),
+                        )
+                    break
+                except Exception as e:
+                    import logging
+                    logging.getLogger("runner").warning(f"ensure_user insert conflict retry {attempt}: {e}")
+                    if attempt == max_attempts - 1:
+                        raise
+                    code = f"{user_id:x}{''.join(random.choices(string.ascii_lowercase + string.digits, k=4))}"
+            return await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
         await _execute(
-            "INSERT INTO users (id, username, first_name, ref_code, referred_by, created_at) "
-            "VALUES (?,?,?,?,?,?)",
-            (user_id, username, first_name, code, referred_by, int(time.time())),
+            "UPDATE users SET username=?, first_name=? WHERE id=?",
+            (username or row["username"], first_name or row["first_name"], user_id),
         )
         return await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
-    await _execute(
-        "UPDATE users SET username=?, first_name=? WHERE id=?",
-        (username or row["username"], first_name or row["first_name"], user_id),
-    )
-    return await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+    except Exception as e:
+        import logging
+        logging.getLogger("runner").error(f"ensure_user failed for user_id={user_id}: {e}", exc_info=True)
+        raise
 
 
 async def get_user(user_id: int):
