@@ -72,21 +72,18 @@ async def cmd_start(message: Message, command: CommandObject):
                 "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
                 "default_buy": None, "default_sell": None, "default_slippage": 10.0}
 
-    # Wallet creation isolated — never blocks reply (already sent above)
-    wallet_pub = ""
-    wallet_priv = ""
+    # Wallet policy: /start only creates the user row. Wallet GENERATE / IMPORT
+    # happens when the user opens TRADING — never auto-generated or prompted here.
+    wallet_pub = user.get("wallet_pub") or ""
+    wallet_priv = user.get("wallet_priv") or ""
     balance_sol = 0
-    try:
-        from utils import ensure_wallet
-        user_after = await ensure_wallet(message, user_id)
-        wallet_pub = (user_after or {}).get("wallet_pub", "")
-        wallet_priv = (user_after or {}).get("wallet_priv", "")
-        if wallet_pub:
+    if wallet_pub:
+        try:
             import solana
             balance_raw = await asyncio.to_thread(solana.sol_balance, wallet_pub)
             balance_sol = solana.lam_to_sol(balance_raw)
-    except Exception as e:
-        log.warning(f"cmd_start: wallet creation failed for user {user_id}: {e}")
+        except Exception as e:
+            log.warning(f"cmd_start: balance fetch failed for user {user_id}: {e}")
 
     # Admin notification isolated — never blocks reply
     if user.get("created_at") and (int(time.time()) - int(user["created_at"])) < 30:

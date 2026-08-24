@@ -347,8 +347,13 @@ async def count_refs(user_id: int):
 
 
 async def set_wallet(user_id: int, priv: str, pub: str):
+    """Persist a wallet. Raises if the user row is missing or the write didn't
+    stick, so handlers can tell the user instead of failing silently."""
     await _execute("UPDATE users SET wallet_priv=?, wallet_pub=? WHERE id=?",
                    (priv, pub, user_id))
+    row = await _fetchone("SELECT wallet_pub FROM users WHERE id=?", (user_id,))
+    if not row or row["wallet_pub"] != pub:
+        raise RuntimeError(f"set_wallet: wallet did not persist for user {user_id}")
 
 
 async def bump_free(user_id: int):

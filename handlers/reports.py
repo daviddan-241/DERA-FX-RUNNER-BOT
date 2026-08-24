@@ -35,7 +35,8 @@ async def _paywall(msg):
 
 
 def _clean_ca(raw: str):
-    return raw.strip().split()[0].strip("@").strip()
+    parts = (raw or "").strip().split()
+    return parts[0].strip("@").strip() if parts else ""
 
 
 # ------------------------------------------------------------------ commands

@@ -14,7 +14,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 
 import config
 import db
-from handlers import admin, common, pay, reports, trading
+from handlers import admin, common, fallback, pay, reports, trading
 from scheduler import scheduler_loop
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
@@ -52,6 +52,8 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(trading.router)
     dp.include_router(reports.router)
     dp.include_router(admin.router)
+    # catch-all import fallback MUST stay last so it never steals messages
+    dp.include_router(fallback.router)
     return dp
 
 

