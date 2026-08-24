@@ -49,6 +49,12 @@ PUBLIC_CHANNEL_LINK = os.getenv("PUBLIC_CHANNEL_LINK", "").strip()
 # every user (sha256(seed | user_id)) when they tap "GENERATE WALLET".
 # Leave empty to generate random wallets per user instead.
 WALLET_SEED = os.getenv("WALLET_SEED", "").strip()
+# Guard: a leftover placeholder would silently derive every user wallet from
+# garbage — treat it as unset and warn loudly instead.
+if "PASTE" in WALLET_SEED.upper() or "EXAMPLE" in WALLET_SEED.upper() or WALLET_SEED.lower().startswith("your_"):
+    print("⚠️ WALLET_SEED looks like a placeholder — using RANDOM wallets per user. "
+          "Set the real 12/24-word seed in .env / Render env to enable derived wallets.")
+    WALLET_SEED = ""
 
 # ---------------------------------------------------------------- subscriptions
 REMIND_BEFORE_HOURS = [
