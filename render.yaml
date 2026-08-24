@@ -47,7 +47,7 @@ services:
       - key: ELITE_DAYS
         value: "60"
       - key: BOT_MONTH_NAME
-        value: Monthly Access
+        value: VIP Access
       - key: BOT_MONTH_PRICE
         value: "5"
       - key: BOT_MONTH_DAYS

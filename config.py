@@ -76,10 +76,10 @@ def _i(name, default):
 
 
 # ---------------------------------------------------------------------
-#  📅 MONTHLY ACCESS — single monthly subscription that unlocks unlimited
+#  📅 VIP ACCESS — unlock unlimited reports + trading after 3 free trials
 #  reports after the 3 free trials (like the original bot's month plan).
 # ---------------------------------------------------------------------
-BOT_MONTH_NAME = os.getenv("BOT_MONTH_NAME", "Monthly Access").strip()
+BOT_MONTH_NAME = os.getenv("BOT_MONTH_NAME", "VIP Access").strip()
 BOT_MONTH_PRICE = float(os.getenv("BOT_MONTH_PRICE", "5"))
 BOT_MONTH_DAYS = int(os.getenv("BOT_MONTH_DAYS", "30"))
 
