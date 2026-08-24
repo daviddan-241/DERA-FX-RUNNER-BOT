@@ -1,4 +1,5 @@
 """Shared async helpers: treasury, owner notify, channel access, time formatting."""
+import asyncio
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -8,6 +9,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 import config
 import db
+import solana
 import texts
 
 
@@ -112,14 +114,31 @@ def parse_tx_ref(text: str):
 
 
 async def ensure_wallet(msg, user_id: int):
-    """Return the user if they have a trading wallet, else send the
-    GENERATE/IMPORT prompt ONCE and return None.
-    Uses ensure_user so the user row ALWAYS exists (fixes the old bug where
-    generating did nothing and the prompt kept coming back)."""
-    import keyboards as kb
-    import texts
-    user = await db.ensure_user(user_id)
+    """Return the user with their trading wallet. Does NOT auto-generate.
+    If no wallet exists and msg is provided, prompts GENERATE / IMPORT.
+    Keeps /importwallet real. Never crashes the /start flow."""
+    import logging, keyboards as kb
+    log = logging.getLogger("runner")
+    try:
+        user = await db.ensure_user(user_id)
+    except Exception as e:
+        log.error(f"ensure_wallet: db.ensure_user failed for {user_id}: {e}")
+        if msg:
+            try:
+                await msg.answer(
+                    "❌ Could not load your account. Please try /start again.",
+                    parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
+            except Exception:
+                pass
+        return None
     if user.get("wallet_pub"):
         return user
-    await msg.answer(texts.ask_wallet_choice(), reply_markup=kb.wallet_setup_kb())
+    # No wallet — prompt setup if a message handle is available
+    if msg:
+        try:
+            await msg.answer(
+                texts.ask_wallet_choice(),
+                parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
+        except Exception as e:
+            log.warning(f"ensure_wallet: failed to send wallet setup prompt: {e}")
     return None

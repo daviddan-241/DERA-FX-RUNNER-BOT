@@ -1,6 +1,6 @@
 """
 All inline keyboards — cloned button-for-button from the original bot,
-plus the membership / insider / channel / trading upgrades.
+plus the VIP Access / channel / trading upgrades.
 """
 from aiogram.types import CopyTextButton, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
@@ -23,10 +23,10 @@ def main_menu():
 
 
 def paywall_kb():
-    """Shown when the 3 free trial reports are used — single monthly access
-    first, then the membership tiers (like the original bot's paywall)."""
+    """Shown when the 3 free trial reports are used — VIP Access first,
+    then the membership tiers (like the original bot's paywall)."""
     b = InlineKeyboardBuilder()
-    for p in PLANS[:1]:   # 📅 Monthly Access
+    for p in PLANS[:1]:   # 📅 VIP Access
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL ({p['days']} days)", f"plan|{p['key']}"))
     for p in PLANS[1:]:   # membership tiers
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL", f"plan|{p['key']}"))
@@ -37,7 +37,7 @@ def paywall_kb():
 # ---------------------------------------------------------------- pay
 def pay_menu():
     b = InlineKeyboardBuilder()
-    for p in PLANS[:1]:   # 📅 Monthly Access (bot access)
+    for p in PLANS[:1]:   # 📅 VIP Access (bot access)
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL ({p['days']} days)", f"plan|{p['key']}"))
     for p in PLANS[1:]:   # membership tiers
         b.row(_b(f"{p['emoji']} {p['name']} - {p['price']:g} SOL", f"plan|{p['key']}"))
@@ -104,14 +104,12 @@ def mysub_kb(plan_key=None, pass_keys=None):
 
 
 # ---------------------------------------------------------------- trading
-def wallet_panel_kb():
+def wallet_panel_kb(addr: str = ""):
     b = InlineKeyboardBuilder()
-    b.row(_b("🟢 BUY", "setbuy"), _b("🔴 SELL", "setsell"), _b("⚙️ SLIPPAGE", "setslip"))
-    b.row(_b("📦 HOLDINGS", "holdings"), _b("💼 POSITIONS", "positions"))
-    b.row(_b("⏳ LIMIT ORDERS", "limits"), _b("🔑 EXPORT WALLET", "export"))
-    b.row(_b("💰 DEPOSIT", "deposit"), _b("📥 IMPORT WALLET", "wimp"))
-    b.row(_b("🔄 REFRESH", "refresh"), _b("💸 WITHDRAW", "withdraw"))
-    b.row(_b("🔙 Menu", "menu"))
+    b.row(_b("🟢 BUY", "setbuy"), _b("🔴 SELL", "setsell"), _b("⚙️ SLIP", "setslip"))
+    b.row(_b("📦 BAGS", "holdings"), _b("💼 POSI", "positions"))
+    b.row(_b("💰 LOAD", "deposit"), _b("💸 CASH", "withdraw"), _b("📥 IMPORT", "wimp"))
+    b.row(_b("🔙 MENU", "menu"))
     return b.as_markup()
 
 
