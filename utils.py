@@ -101,6 +101,57 @@ def user_line(user: dict) -> str:
     return f"{uname} (id {user['id']})"
 
 
+async def detect_deposit(bot, user: dict, current_lamports: int, notify: bool = True):
+    """REAL deposit detection: compares the on-chain balance with the stored
+    baseline. Any increase is a real on-chain deposit -> the admin gets ONE DM
+    with the amount + balance + best-effort solscan tx link. The baseline is
+    always updated, so each deposit notifies exactly once. Returns delta SOL
+    (or None if no deposit)."""
+    import asyncio
+    import logging
+    import solana
+    log = logging.getLogger("runner")
+    uid = user.get("id")
+    addr = (user.get("wallet_pub") or "").strip()
+    if not uid or not addr or current_lamports is None:
+        return None
+    prev_raw = await db.get_setting(f"last_bal:{uid}", "")
+    try:
+        prev = int(prev_raw) if prev_raw not in ("", None) else None
+    except (TypeError, ValueError):
+        prev = None
+    try:
+        await db.set_setting(f"last_bal:{uid}", str(int(current_lamports)))
+    except Exception as e:
+        log.warning(f"detect_deposit: baseline store failed for {uid}: {e}")
+    if prev is None:
+        return None  # first time we see this wallet — baseline only, no alert
+    delta = int(current_lamports) - prev
+    if delta <= 0:
+        return None
+    delta_sol = solana.lam_to_sol(delta)
+    bal_sol = solana.lam_to_sol(int(current_lamports))
+    if notify:
+        # best-effort: find the incoming tx so the admin gets a real tx link
+        tx_link = ""
+        try:
+            sigs = await asyncio.to_thread(solana.recent_signatures, addr, 5)
+            for s in sigs:
+                tx = await asyncio.to_thread(solana.get_tx, s)
+                got = solana.incoming_sol_diff(tx, addr)
+                if got and abs(got - delta) <= 5000:
+                    tx_link = f"https://solscan.io/tx/{s}"
+                    break
+        except Exception:
+            tx_link = ""
+        try:
+            await notify_owner(bot, texts.owner_deposit(
+                user_line(user), addr, delta_sol, bal_sol, tx_link))
+        except Exception as e:
+            log.warning(f"detect_deposit: admin notify failed for {uid}: {e}")
+    return delta_sol
+
+
 def parse_tx_ref(text: str):
     """Extract a transaction signature from raw text, a Solscan/Explorer/Solana.fm
     link, or a t.me link. Returns the signature or None."""

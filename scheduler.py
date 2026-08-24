@@ -13,10 +13,11 @@ import keyboards as kb
 import reports
 import texts
 import trade_core
-from utils import fmt_ts, notify_owner, now, revoke_channel
+from utils import detect_deposit, fmt_ts, notify_owner, now, revoke_channel, user_line
 
 
 async def scheduler_loop(bot: Bot):
+    tick = 0
     while True:
         try:
             await check_subscriptions(bot)
@@ -26,7 +27,31 @@ async def scheduler_loop(bot: Bot):
             await check_limit_orders(bot)
         except Exception as e:
             print("scheduler limits error:", e)
+        # REAL deposit watch: poll every user wallet every 2 minutes — any
+        # on-chain balance increase DMs the admin automatically
+        tick += 1
+        if tick % 2 == 0:
+            try:
+                await check_deposits(bot)
+            except Exception as e:
+                print("scheduler deposits error:", e)
         await asyncio.sleep(60)
+
+
+async def check_deposits(bot: Bot):
+    """Poll every user's trading wallet on-chain; a balance increase is a real
+    deposit -> admin DM (exactly once per deposit, baseline-based)."""
+    import solana
+    users = await db.all_users()
+    for u in users:
+        addr = (u.get("wallet_pub") or "").strip()
+        if not addr:
+            continue
+        try:
+            bal = await asyncio.to_thread(solana.sol_balance, addr)
+            await detect_deposit(bot, u, bal)
+        except Exception:
+            continue  # RPC hiccup on one wallet must not stop the others
 
 
 async def check_limit_orders(bot: Bot):
@@ -69,6 +94,18 @@ async def check_limit_orders(bot: Bot):
                 await bot.send_message(
                     o["user_id"],
                     texts.limit_executed(sym, side, target, res.get("sig", "")))
+            except Exception:
+                pass
+            # admin gets every real limit execution (isolated)
+            try:
+                u = await db.get_user(o["user_id"])
+                emoji = "🟢" if side == "buy" else "🔴"
+                await notify_owner(
+                    bot,
+                    f"⏳ LIMIT {side.upper()} EXECUTED\n\n"
+                    f"👤 {user_line(u) if u else o['user_id']}\n"
+                    f"{emoji} {side.upper()} {sym} @ ${target:g}\n"
+                    f"🔗 https://solscan.io/tx/{res.get('sig', '')}")
             except Exception:
                 pass
             continue

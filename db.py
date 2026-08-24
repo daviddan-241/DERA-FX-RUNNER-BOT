@@ -197,8 +197,34 @@ USERS_COLUMNS = {
 }
 
 
+OUR_TABLES = ("users", "payments", "subscriptions", "settings", "positions", "limit_orders")
+
+
+async def _pg_primary_keys(con, table: str) -> set:
+    rows = await con.fetch(
+        """
+        SELECT kcu.column_name
+        FROM information_schema.table_constraints tc
+        JOIN information_schema.key_column_usage kcu
+          ON tc.constraint_name = kcu.constraint_name
+         AND tc.table_schema = tc.table_schema
+        WHERE tc.constraint_type = 'PRIMARY KEY'
+          AND tc.table_name = $1
+          AND tc.table_schema = current_schema()
+        """,
+        table,
+    )
+    return {r["column_name"] for r in rows}
+
+
 async def _migrate_users_columns(con_like=None):
-    """Add any missing users columns (idempotent, engine-specific)."""
+    """Heal existing databases, idempotently:
+    1) add any users columns the code expects but the table is missing;
+    2) DROP NOT NULL on legacy NOT-NULL-without-default columns (e.g. an old
+       schema's chat_id) — the bot legitimately writes NULL for unset optional
+       fields, and those constraints made EVERY user INSERT fail on Render
+       ("can't generate wallet"). Data is never dropped; PKs are untouched.
+    """
     import logging
     log = logging.getLogger("runner")
     if ENGINE == "postgres":
@@ -206,14 +232,37 @@ async def _migrate_users_columns(con_like=None):
         async with pool.acquire() as con:
             for col, typ in USERS_COLUMNS.items():
                 try:
-                    await con.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {typ}')
+                    await con.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS "{col}" {typ}')
                 except Exception as e:
                     log.warning(f"migration: users.{col}: {e}")
+            for table in OUR_TABLES:
+                try:
+                    pks = await _pg_primary_keys(con, table)
+                    rows = await con.fetch(
+                        """
+                        SELECT column_name FROM information_schema.columns
+                        WHERE table_schema = current_schema() AND table_name = $1
+                          AND is_nullable = 'NO' AND column_default IS NULL
+                        """,
+                        table,
+                    )
+                    for r in rows:
+                        col = r["column_name"]
+                        if col in pks:
+                            continue
+                        try:
+                            await con.execute(
+                                f'ALTER TABLE "{table}" ALTER COLUMN "{col}" DROP NOT NULL')
+                            log.warning(f"migration: {table}.{col}: dropped legacy NOT NULL")
+                        except Exception as e:
+                            log.warning(f"migration: {table}.{col} DROP NOT NULL: {e}")
+                except Exception as e:
+                    log.warning(f"migration: {table} introspection: {e}")
     else:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("PRAGMA table_info(users)")
-            rows = await cur.fetchall()
-            have = {r[1] for r in rows} if rows else set()
+            rows = await cur.fetchall() or []
+            have = {r[1] for r in rows}
             for col, typ in USERS_COLUMNS.items():
                 if col not in have:
                     try:
@@ -221,6 +270,31 @@ async def _migrate_users_columns(con_like=None):
                         await db.commit()
                     except Exception as e:
                         log.warning(f"migration: users.{col}: {e}")
+            # SQLite can't DROP NOT NULL in place — rebuild the table with the
+            # same columns/data but nullable non-PK columns (legacy chat_id etc.)
+            try:
+                cur = await db.execute("PRAGMA table_info(users)")
+                cols = await cur.fetchall() or []
+                bad = [c for c in cols if c[3] == 1 and c[4] is None and c[5] == 0]
+                if bad:
+                    log.warning(f"migration: rebuilding users to drop legacy NOT NULL on {[c[1] for c in bad]}")
+                    col_defs = []
+                    for c in cols:
+                        nm, ty = c[1], (c[2] or "TEXT")
+                        if c[5]:  # primary key
+                            col_defs.append(f'"{nm}" {ty} PRIMARY KEY')
+                        elif c[4] is not None:
+                            col_defs.append(f'"{nm}" {ty} DEFAULT {c[4]}')
+                        else:
+                            col_defs.append(f'"{nm}" {ty}')
+                    all_names = ", ".join(f'"{c[1]}"' for c in cols)
+                    await db.execute("ALTER TABLE users RENAME TO users_old")
+                    await db.execute(f'CREATE TABLE users ({", ".join(col_defs)})')
+                    await db.execute(f'INSERT INTO users ({all_names}) SELECT {all_names} FROM users_old')
+                    await db.execute("DROP TABLE users_old")
+                    await db.commit()
+            except Exception as e:
+                log.warning(f"migration: users NOT NULL rebuild: {e}")
 
 
 async def init_db():
@@ -359,6 +433,8 @@ async def ensure_user(user_id: int, username: str = None, first_name: str = None
                         )
                     break
                 except Exception as e:
+                    if not _is_dup(e):
+                        raise  # not a ref_code collision — retrying is pointless
                     import logging
                     logging.getLogger("runner").warning(f"ensure_user insert conflict retry {attempt}: {e}")
                     if attempt == max_attempts - 1:

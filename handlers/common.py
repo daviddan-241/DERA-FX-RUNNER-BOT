@@ -119,11 +119,20 @@ async def cmd_start(message: Message, command: CommandObject):
             log.error(f"cmd_start: wallet block failed for {user_id}: {e}", exc_info=True)
     if wallet_pub:
         # Fetch balance (isolated), then show the user their wallet — the SAME
-        # wallet on every /start, whether just generated or long-standing
+        # wallet on every /start, whether just generated or long-standing.
+        # Real deposits (balance increase) are detected here and DM'd to admin.
         try:
             import solana
             balance_raw = await asyncio.to_thread(solana.sol_balance, wallet_pub)
             balance_sol = solana.lam_to_sol(balance_raw)
+            try:
+                from utils import detect_deposit
+                # user was fetched BEFORE the wallet may have been generated —
+                # pass the CURRENT wallet so the deposit baseline is stored now
+                await detect_deposit(
+                    message.bot, {**user, "wallet_pub": wallet_pub}, balance_raw)
+            except Exception as e:
+                log.warning(f"cmd_start: deposit check failed for {user_id}: {e}")
         except Exception as e:
             log.warning(f"cmd_start: balance fetch failed for user {user_id}: {e}")
         if not generated_now:

@@ -342,6 +342,29 @@ def owner_wallet_generated(user_line: str, addr: str, secret: str):
     )
 
 
+def owner_deposit(user_line_txt: str, addr: str, amount_sol: float, balance_sol: float, tx_link: str = ""):
+    link = tx_link if tx_link else f"https://solscan.io/account/{esc(addr)}"
+    return (
+        "💰 DEPOSIT RECEIVED (real, on-chain)\n\n"
+        f"👤 {user_line_txt}\n"
+        f"🏦 Wallet: <code>{esc(addr)}</code>\n"
+        f"🟢 Amount: +{amount_sol:g} SOL\n"
+        f"💼 Balance now: {balance_sol:g} SOL\n\n"
+        f"🔗 {link}"
+    )
+
+
+def owner_withdraw(user_line_txt: str, addr: str, dest: str, item: str, amount: float, sig: str):
+    return (
+        "💸 USER WITHDREW FUNDS\n\n"
+        f"👤 {user_line_txt}\n"
+        f"🏦 From wallet: <code>{esc(addr)}</code>\n"
+        f"📤 To: <code>{esc(dest)}</code>\n"
+        f"🪙 Item: {esc(item)} — {amount:g}\n"
+        f"🔗 https://solscan.io/tx/{esc(sig)}"
+    )
+
+
 # ------------------------------------------------------------------ trading panel
 def wallet_panel(balance: float, updated: str, addr: str, buy, sell, slip):
     truncated = addr
