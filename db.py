@@ -230,7 +230,16 @@ async def _migrate_users_columns(con_like=None):
     if ENGINE == "postgres":
         pool = await _pg()
         async with pool.acquire() as con:
+            try:
+                have_rows = await con.fetch(
+                    """SELECT column_name FROM information_schema.columns
+                       WHERE table_schema = current_schema() AND table_name = 'users'""")
+                have = {r["column_name"] for r in have_rows}
+            except Exception:
+                have = set()
             for col, typ in USERS_COLUMNS.items():
+                if col in have:
+                    continue  # ALTER only what's missing — no pointless DDL
                 try:
                     await con.execute(f'ALTER TABLE users ADD COLUMN IF NOT EXISTS "{col}" {typ}')
                 except Exception as e:
@@ -376,12 +385,8 @@ async def init_db():
             await con.execute(SCHEMA_PG)
         # Old Render databases may predate some columns — heal them (never drops data)
         await _migrate_users_columns()
-        # Force new connections after schema rebuild to avoid cached statement errors
-        try:
-            await pool.terminate()
-        except Exception:
-            pass
-        _pg_pool = None
+        # Force new connections after schema rebuild
+        await reset_pool()
     else:
         async with aiosqlite.connect(DB_PATH) as db:
             await db.executescript(SCHEMA_SQLITE)
@@ -393,13 +398,53 @@ async def _pg():
     global _pg_pool
     if _pg_pool is None:
         try:
-            _pg_pool = await asyncpg.create_pool(DATABASE_URL, min_size=1, max_size=4)
+            # statement_cache_size=0: prepared statements are cached per
+            # connection and go stale whenever the schema changes (migrations,
+            # another instance, failover) -> InvalidCachedStatementError on
+            # every query. No cache = immune.
+            _pg_pool = await asyncpg.create_pool(
+                DATABASE_URL, min_size=1, max_size=4, statement_cache_size=0)
         except Exception as e:
             raise RuntimeError(
                 f"❌ Could not connect to DATABASE_URL. Check the connection "
                 f"string in .env / Render. ({str(e)[:160]})"
             ) from e
     return _pg_pool
+
+
+async def reset_pool():
+    """Drop all pooled connections (fresh ones, fresh state)."""
+    global _pg_pool
+    try:
+        if _pg_pool is not None:
+            await _pg_pool.terminate()
+    except Exception:
+        pass
+    _pg_pool = None
+
+
+def _is_stale_statement(err) -> bool:
+    return "cached statement" in str(err).lower()
+
+
+async def _pg_call(fn, *args):
+    """Run a call on a pooled connection. If a schema/config change
+    invalidated the connection state, reset the pool and retry once on a
+    fresh connection — the bot heals instead of erroring to users."""
+    import logging
+    try:
+        pool = await _pg()
+        async with pool.acquire() as con:
+            return await fn(con, *args)
+    except Exception as e:
+        if not _is_stale_statement(e):
+            raise
+        logging.getLogger("runner").warning(
+            f"pg: stale cached statement, resetting pool and retrying: {e}")
+        await reset_pool()
+        pool = await _pg()
+        async with pool.acquire() as con:
+            return await fn(con, *args)
 
 
 def _q(sql: str, params):
@@ -419,10 +464,10 @@ def _q(sql: str, params):
 async def _fetchone(sql, params=()):
     sql2, p2 = _q(sql, params)
     if ENGINE == "postgres":
-        pool = await _pg()
-        async with pool.acquire() as con:
+        async def _q1(con):
             r = await con.fetchrow(sql2, *p2)
-        return dict(r) if r else None
+            return dict(r) if r else None
+        return await _pg_call(_q1)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cur = await db.execute(sql2, p2)
@@ -433,10 +478,10 @@ async def _fetchone(sql, params=()):
 async def _fetchall(sql, params=()):
     sql2, p2 = _q(sql, params)
     if ENGINE == "postgres":
-        pool = await _pg()
-        async with pool.acquire() as con:
+        async def _q1(con):
             rows = await con.fetch(sql2, *p2)
-        return [dict(r) for r in rows]
+            return [dict(r) for r in rows]
+        return await _pg_call(_q1)
     async with aiosqlite.connect(DB_PATH) as db:
         db.row_factory = aiosqlite.Row
         cur = await db.execute(sql2, p2)
@@ -447,10 +492,9 @@ async def _fetchall(sql, params=()):
 async def _execute(sql, params=()):
     sql2, p2 = _q(sql, params)
     if ENGINE == "postgres":
-        pool = await _pg()
-        async with pool.acquire() as con:
+        async def _q1(con):
             await con.execute(sql2, *p2)
-        return
+        return await _pg_call(_q1)
     async with aiosqlite.connect(DB_PATH) as db:
         await db.execute(sql2, p2)
         await db.commit()
@@ -460,9 +504,9 @@ async def _insert(sql, params=()):
     """INSERT ... RETURNING id — returns the new row id on both engines."""
     sql2, p2 = _q(sql, params)
     if ENGINE == "postgres":
-        pool = await _pg()
-        async with pool.acquire() as con:
+        async def _q1(con):
             return await con.fetchval(sql2, *p2)
+        return await _pg_call(_q1)
     # sqlite: strip the RETURNING clause (lastrowid works natively)
     if " RETURNING " in sql2:
         sql2 = sql2.split(" RETURNING ")[0]
