@@ -242,7 +242,7 @@ async def ensure_wallet(msg, user_id: int):
     if msg:
         try:
             await msg.answer(
-                texts.wallet_generated(addr, derived=bool(config.WALLET_SEED)),
+                texts.wallet_generated(addr),
                 parse_mode="HTML",
                 reply_markup=kb.wallet_done_kb(addr, secret))
         except Exception as e:

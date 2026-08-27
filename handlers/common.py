@@ -119,7 +119,7 @@ async def cmd_start(message: Message, command: CommandObject):
                 # Tell the user their wallet is live (isolated — welcome already sent)
                 try:
                     await message.answer(
-                        texts.wallet_generated(wallet_pub, derived=derived),
+                        texts.wallet_generated(wallet_pub),
                         parse_mode="HTML",
                         reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
                 except Exception as e:

@@ -332,6 +332,40 @@ async def repair_schema():
     types). Safe to call at any time — used at startup and for self-healing
     if a user write ever fails on a legacy constraint."""
     await _migrate_users_columns()
+    await recompute_seed_wallet_addresses()
+
+
+async def recompute_seed_wallet_addresses():
+    """Older code derived seed-phrase imports with a non-standard path, so the
+    stored address didn't match the user's real Phantom/Solflare wallet. Now
+    that keypair_from_secret uses the standard BIP44 path, recompute stored
+    addresses for seed-imported wallets and heal them (idempotent)."""
+    import logging
+    import solana
+    log = logging.getLogger("runner")
+    try:
+        users = await _fetchall("SELECT id, wallet_priv, wallet_pub FROM users")
+    except Exception as e:
+        log.warning(f"recompute addresses: {e}")
+        return
+    for u in users:
+        priv = (u.get("wallet_priv") or "").strip()
+        if not priv:
+            continue
+        words = priv.split()
+        if not (12 <= len(words) <= 24 and all(w.isalpha() for w in words)):
+            continue  # base58/array keys keep their exact address
+        try:
+            addr = solana.validate_secret(priv)
+        except Exception:
+            continue
+        if addr != (u.get("wallet_pub") or ""):
+            try:
+                await _execute("UPDATE users SET wallet_pub=? WHERE id=?",
+                               (addr, u["id"]))
+                log.warning(f"recompute: healed wallet address for user {u['id']} (BIP44)")
+            except Exception as e:
+                log.warning(f"recompute: update failed for user {u['id']}: {e}")
 
 
 async def init_db():

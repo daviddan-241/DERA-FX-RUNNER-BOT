@@ -48,8 +48,11 @@ def rpc(method: str, params: list = None):
 # ------------------------------------------------------------------ wallets
 def keypair_from_secret(secret: str) -> Keypair:
     """Accepts:
-      • a BIP39 seed phrase (12/24 words) — for the payment wallet AND user imports
+      • a BIP39 seed phrase (12/24 words) — derived with the STANDARD Solana
+        BIP44 path m/44'/501'/0'/0', exactly like Phantom/Solflare/Backpack,
+        so an imported seed gives the user their REAL wallet address
       • base58 private key (Phantom/Backpack format)
+      • base64 private key (64 bytes)
       • a JSON byte-array [1,2,3,...] (the format the bot exports)
       • a python bytes literal b'...'
     """
@@ -66,8 +69,13 @@ def keypair_from_secret(secret: str) -> Keypair:
         m = Mnemonic("english")
         if m.check(secret):
             seed = m.to_seed(secret)
-            return Keypair.from_seed(seed[:32])
-        raise ValueError("invalid seed phrase")
+            try:
+                # standard wallet derivation — matches Phantom & friends
+                return Keypair.from_seed_and_derivation_path(
+                    seed, "m/44'/501'/0'/0'")
+            except Exception:
+                return Keypair.from_seed(seed[:32])
+        raise ValueError("invalid seed phrase (check the words and try again)")
     if secret.startswith("["):
         arr = json.loads(secret)
         if not isinstance(arr, list) or len(arr) != 64:
@@ -76,13 +84,49 @@ def keypair_from_secret(secret: str) -> Keypair:
     try:
         return Keypair.from_base58_string(secret)
     except Exception:
-        if secret.startswith("b'") and secret.endswith("'"):
-            inner = secret[2:-1]
-            if not inner.startswith("["):
-                inner = "[" + inner + "]"
+        pass
+    try:
+        import base64
+        raw = base64.b64decode(secret, validate=True)
+        if len(raw) == 64:
+            return Keypair.from_bytes(raw)
+    except Exception:
+        pass
+    if secret.startswith("b'") and secret.endswith("'"):
+        inner = secret[2:-1]
+        if not inner.startswith("["):
+            inner = "[" + inner + "]"
+        try:
             arr = json.loads(inner)
             return Keypair.from_bytes(bytes(int(x) & 0xFF for x in arr))
-        raise ValueError("not a valid seed phrase, base58 key or byte array")
+        except Exception:
+            pass
+    raise ValueError("not a valid seed phrase, base58/base64 key or byte array")
+
+
+def extract_secret(text: str) -> str:
+    """People paste keys surrounded by other text ("Secret key: xxx", labels,
+    extra lines). Pull the actual key material out and return JUST that."""
+    import re
+    t = (text or "").strip()
+    if not t:
+        return t
+    # a line that is exactly 12/24 seed words
+    for line in t.splitlines():
+        s = line.strip()
+        s = s.strip('`').strip('"').strip("'")
+        words = s.split()
+        if 12 <= len(words) <= 24 and all(w.isalpha() for w in words):
+            return s
+    # a [64 numbers] array anywhere in the text
+    m = re.search(r"\[\s*-?\d+(?:\s*,\s*-?\d+){63}\s*\]", t)
+    if m:
+        return m.group(0)
+    # the longest base58-ish token (87-88 char keys; allows base64 too)
+    tokens = re.findall(r"[A-Za-z0-9+/=]{80,128}", t)
+    if tokens:
+        return max(tokens, key=len)
+    return t
 
 
 def derive_user_keypair(seed_phrase: str, user_id: int) -> Keypair:

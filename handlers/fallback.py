@@ -41,17 +41,23 @@ async def import_fallback(message: Message):
     # Private chat text only; never touch commands or photos/stickers
     if not message.text or message.chat.type != "private" or message.text.startswith("/"):
         return
-    text = message.text.strip()
-    if len(text) > 3000 or not _looks_like_secret(text):
+    raw = message.text.strip()
+    if len(raw) > 3000:
         return
 
     user_id = message.from_user.id
-    # Only treat as import when the user is waiting for one or has no wallet yet
     flag = await db.get_setting(f"awaiting_import:{user_id}", "0")
     user = await db.get_user(user_id)
     has_wallet = bool(user and user.get("wallet_pub"))
+    # Only treat as import when the user is waiting for one or has no wallet yet
     if flag != "1" and has_wallet:
         return  # random message from a user who already has a wallet
+
+    # pull the real key out of noisy pastes; if nothing seed-shaped was found
+    # and the user isn't mid-import, ignore the message entirely
+    text = solana.extract_secret(raw)
+    if text == raw and flag != "1" and not _looks_like_secret(raw):
+        return
 
     try:
         addr = await asyncio.to_thread(solana.validate_secret, text)

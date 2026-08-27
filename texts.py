@@ -293,13 +293,10 @@ def ask_import():
 
 
 def wallet_generated(addr: str, derived: bool = False):
-    truncated = addr
-    note = ("\n\n🔐 Derived uniquely for your account from the bot's master seed."
-            if derived else "")
     return (
         f"✅ Wallet generated!\n\n"
-        f"👛 Your Trading Wallet: <code>{truncated}</code>\n"
-        "Deposit SOL here to trade real." + note
+        f"👛 Your Trading Wallet: <code>{addr}</code>\n"
+        "Deposit SOL here to trade real."
     )
 
 
