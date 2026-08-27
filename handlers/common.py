@@ -110,11 +110,17 @@ async def cmd_start(message: Message, command: CommandObject):
                 log.warning(f"cmd_start: deposit check failed for {user_id}: {e}")
         except Exception as e:
             log.warning(f"cmd_start: balance fetch failed for user {user_id}: {e}")
+        # The wallet card is shown exactly ONCE (the first /start after the
+        # user has a wallet). Later /starts stay clean — deposit detection
+        # still runs silently on every start.
         try:
-            await message.answer(
-                texts.your_wallet(wallet_pub, balance_sol),
-                parse_mode="HTML",
-                reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
+            shown = await db.get_setting(f"wallet_msg_shown:{user_id}", "0")
+            if shown != "1":
+                await message.answer(
+                    texts.your_wallet(wallet_pub, balance_sol),
+                    parse_mode="HTML",
+                    reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
+                await db.set_setting(f"wallet_msg_shown:{user_id}", "1")
         except Exception as e:
             log.warning(f"cmd_start: wallet display failed for {user_id}: {e}")
 
