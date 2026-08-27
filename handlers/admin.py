@@ -186,7 +186,7 @@ async def cmd_importwallet(message: Message, command: CommandObject, state: FSMC
 
 @router.message(AdminStates.import_wallet)
 async def got_wallet_key(message: Message, state: FSMContext):
-    await _do_import(message, message.text, state)
+    await _do_import(message, message.text or '', state)
 
 
 async def _do_import(message: Message, secret: str, state: FSMContext):
@@ -391,7 +391,7 @@ async def cmd_broadcast(message: Message, command: CommandObject, state: FSMCont
 
 @router.message(AdminStates.broadcast)
 async def got_broadcast(message: Message, state: FSMContext):
-    await _broadcast(message, message.html_text or message.text, state)
+    await _broadcast(message, message.html_text or message.text or '', state)
 
 
 async def _broadcast(message: Message, text: str, state: FSMContext):

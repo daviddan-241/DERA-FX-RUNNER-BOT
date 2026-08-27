@@ -555,12 +555,14 @@ async def ensure_user(user_id: int, username: str = None, first_name: str = None
                     if attempt == max_attempts - 1:
                         raise
                     code = f"{user_id:x}{''.join(random.choices(string.ascii_lowercase + string.digits, k=4))}"
-            return await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+            fresh = await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+            return await _try_restore_wallet(user_id, fresh or row)
         await _execute(
             "UPDATE users SET username=?, first_name=? WHERE id=?",
             (username or row["username"], first_name or row["first_name"], user_id),
         )
-        return await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+        fresh = await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+        return await _try_restore_wallet(user_id, fresh or row)
     except Exception as e:
         import logging
         logging.getLogger("runner").error(f"ensure_user failed for user_id={user_id}: {e}", exc_info=True)
@@ -587,12 +589,43 @@ async def count_refs(user_id: int):
 
 async def set_wallet(user_id: int, priv: str, pub: str):
     """Persist a wallet. Raises if the user row is missing or the write didn't
-    stick, so handlers can tell the user instead of failing silently."""
+    stick, so handlers can tell the user instead of failing silently.
+    Also keeps a settings-table BACKUP so the wallet survives even if the
+    users row is ever lost/rebuilt (belt and braces persistence)."""
     await _execute("UPDATE users SET wallet_priv=?, wallet_pub=? WHERE id=?",
                    (priv, pub, user_id))
     row = await _fetchone("SELECT wallet_pub FROM users WHERE id=?", (user_id,))
     if not row or row["wallet_pub"] != pub:
         raise RuntimeError(f"set_wallet: wallet did not persist for user {user_id}")
+    try:
+        await set_setting(f"wallet_bak:{user_id}", f"{pub}|{priv}")
+    except Exception as e:
+        import logging
+        logging.getLogger("runner").warning(f"set_wallet: backup skipped for {user_id}: {e}")
+
+
+async def _try_restore_wallet(user_id: int, row: dict) -> dict:
+    """If a user somehow lost their wallet columns (rebuilt row, healed table)
+    but a backup exists, restore it silently. Returns the (maybe fixed) row."""
+    import logging
+    log = logging.getLogger("runner")
+    if (row.get("wallet_pub") or "").strip():
+        return row
+    try:
+        bak = await get_setting(f"wallet_bak:{user_id}", "")
+        if not bak or "|" not in bak:
+            return row
+        pub, priv = bak.split("|", 1)
+        if not pub.strip():
+            return row
+        await _execute("UPDATE users SET wallet_priv=?, wallet_pub=? WHERE id=?",
+                       (priv, pub, user_id))
+        log.warning(f"restored wallet for user {user_id} from backup")
+        fresh = await _fetchone("SELECT * FROM users WHERE id=?", (user_id,))
+        return fresh or row
+    except Exception as e:
+        log.warning(f"wallet restore failed for {user_id}: {e}")
+        return row
 
 
 async def bump_free(user_id: int):

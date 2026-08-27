@@ -54,6 +54,39 @@ def build_dispatcher() -> Dispatcher:
     dp.include_router(admin.router)
     # catch-all import fallback MUST stay last so it never steals messages
     dp.include_router(fallback.router)
+
+    # GLOBAL ERROR NET: no handler failure is ever silent — the user gets a
+    # friendly retry message, the admin gets the error, the log gets the trace.
+    @dp.errors()
+    async def on_errors(event, bot: Bot):
+        from aiogram.types import Message, CallbackQuery
+        log.error(f"unhandled error: {event.exception}", exc_info=event.exception)
+        chat_id = None
+        try:
+            m = event.update.message or event.update.edited_message
+            if not m:
+                cb = event.update.callback_query
+                m = cb.message if cb else None
+            chat_id = m.chat.id if m else None
+        except Exception:
+            pass
+        if chat_id:
+            try:
+                await bot.send_message(
+                    chat_id, "⚠️ Something hiccupped — please try again in a moment.")
+            except Exception:
+                pass
+        try:
+            import config as _c
+            if _c.OWNER_ID:
+                await bot.send_message(
+                    _c.OWNER_ID,
+                    f"🚨 Unhandled bot error (user chat {chat_id}):\n"
+                    f"<code>{type(event.exception).__name__}: {str(event.exception)[:250]}</code>",
+                    parse_mode="HTML")
+        except Exception:
+            pass
+        return True
     return dp
 
 
@@ -95,7 +128,23 @@ async def main():
             await asyncio.sleep(30)
     else:
         raise SystemExit(f"Database unreachable after 10 attempts: {last_err}")
-    log.info("Database engine: %s", "postgresql" if db.ENGINE == "postgres" else "sqlite")
+    # DB identity + counts: instantly visible if a deploy points at the WRONG
+    # database (users/wallets counts suddenly 0 = wrong DATABASE_URL)
+    try:
+        if db.ENGINE == "postgres":
+            row = await db._fetchone(
+                "SELECT current_database() AS dbname, "
+                "(SELECT COUNT(*) FROM users) AS users, "
+                "(SELECT COUNT(*) FROM users WHERE wallet_pub IS NOT NULL AND wallet_pub <> '') AS wallets")
+            log.info("DB check: engine=postgres db=%s users=%s wallets=%s",
+                     row["dbname"], row["users"], row["wallets"])
+        else:
+            row = await db._fetchone(
+                "SELECT (SELECT COUNT(*) FROM users) AS users, "
+                "(SELECT COUNT(*) FROM users WHERE wallet_pub IS NOT NULL AND wallet_pub <> '') AS wallets")
+            log.info("DB check: engine=sqlite users=%s wallets=%s", row["users"], row["wallets"])
+    except Exception as e:
+        log.warning(f"DB check failed: {e}")
 
     bot = Bot(token=config.BOT_TOKEN)
     dp = build_dispatcher()

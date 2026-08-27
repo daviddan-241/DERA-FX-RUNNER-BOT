@@ -37,7 +37,7 @@ def lam_to_sol(lam) -> float:
 # ------------------------------------------------------------------ rpc
 def rpc(method: str, params: list = None):
     body = {"jsonrpc": "2.0", "id": 1, "method": method, "params": params or []}
-    r = requests.post(config.RPC_URL, json=body, timeout=30)
+    r = requests.post(config.RPC_URL, json=body, timeout=12)
     r.raise_for_status()
     data = r.json()
     if "error" in data and data["error"]:
@@ -142,7 +142,16 @@ def new_keypair() -> Keypair:
 
 
 def sol_balance(addr: str) -> int:
-    return rpc("getBalance", [addr])["value"]
+    """Balance in lamports — retried once so one RPC hiccup doesn't zero
+    someone's panel."""
+    last = None
+    for attempt in range(2):
+        try:
+            res = rpc("getBalance", [str(addr)])
+            return int(res["value"])
+        except Exception as e:
+            last = e
+    raise last
 
 
 def token_accounts(owner: str):

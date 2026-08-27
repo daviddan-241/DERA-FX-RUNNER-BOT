@@ -308,6 +308,9 @@ async def cb_setslip(query: CallbackQuery, state: FSMContext):
 
 @router.message(TradeStates.buy_amount)
 async def got_buy(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     try:
         v = float(message.text.strip().replace(",", "."))
         if v <= 0:
@@ -323,6 +326,9 @@ async def got_buy(message: Message, state: FSMContext):
 
 @router.message(TradeStates.sell_amount)
 async def got_sell(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     try:
         v = float(message.text.strip().replace(",", "."))
         if v <= 0 or v > 100:
@@ -338,6 +344,9 @@ async def got_sell(message: Message, state: FSMContext):
 
 @router.message(TradeStates.slippage_amount)
 async def got_slip(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     try:
         v = float(message.text.strip().replace(",", "."))
         if v <= 0 or v > 50:
@@ -478,6 +487,9 @@ async def cb_wd_select(query: CallbackQuery, state: FSMContext):
 
 @router.message(TradeStates.withdraw_address)
 async def got_wd_address(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     addr = message.text.strip()
     try:
         solana.Pubkey.from_string(addr)
@@ -597,6 +609,9 @@ async def cmd_limit(message: Message, state: FSMContext):
 
 @router.message(TradeStates.limit_ca)
 async def got_limit_ca(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     ca = message.text.strip().split()[0].strip("@").strip()
     if len(ca) < 32:
         await message.answer("❌ That doesn't look like a contract address. Send it again:")
@@ -620,6 +635,9 @@ async def got_limit_side(query: CallbackQuery, state: FSMContext):
 
 @router.message(TradeStates.limit_price)
 async def got_limit_price(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     try:
         price = float(message.text.strip().replace(",", "."))
         if price <= 0:
@@ -640,6 +658,9 @@ async def got_limit_price(message: Message, state: FSMContext):
 
 @router.message(TradeStates.limit_amount)
 async def got_limit_amount(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send text only 🙂")
+        return
     try:
         amount = float(message.text.strip().replace(",", "."))
         if amount <= 0:

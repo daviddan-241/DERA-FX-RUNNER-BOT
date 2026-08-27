@@ -171,6 +171,9 @@ async def cb_tx_payment(query: CallbackQuery, state: FSMContext):
 
 @router.message(PayStates.tx_input)
 async def got_tx(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send the transaction signature as text 🙂")
+        return
     data = await state.get_data()
     kind, key = data.get("tx_kind"), data.get("tx_key")
     await state.clear()

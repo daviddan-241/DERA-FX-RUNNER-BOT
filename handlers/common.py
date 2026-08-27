@@ -164,6 +164,9 @@ async def cmd_ai(message: Message, state: FSMContext):
 
 @router.message(AiStates.ai_ca)
 async def got_ai_ca(message: Message, state: FSMContext):
+    if not message.text:
+        await message.answer("Please send the contract address as text 🙂")
+        return
     ca = message.text.strip().split()[0].strip("@").strip()
     await state.clear()
     import config
