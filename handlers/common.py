@@ -71,11 +71,22 @@ async def cmd_start(message: Message, command: CommandObject):
             referred_by=referred_by,
         )
     except Exception as e:
-        log.error(f"cmd_start: ensure_user failed for user {user_id}: {e}", exc_info=True)
-        user = {"id": user_id, "username": message.from_user.username, "first_name": message.from_user.first_name,
-                "created_at": int(time.time()), "ref_code": "", "referred_by": None,
-                "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
-                "default_buy": None, "default_sell": None, "default_slippage": 10.0}
+        log.error(f"cmd_start: ensure_user failed for user {user_id}: {e}")
+        # Self-heal once: repair legacy schema (idempotent) and retry
+        try:
+            await db.repair_schema()
+            user = await db.ensure_user(
+                user_id,
+                username=message.from_user.username,
+                first_name=message.from_user.first_name,
+                referred_by=referred_by,
+            )
+        except Exception as e2:
+            log.error(f"cmd_start: ensure_user retry failed for {user_id}: {e2}", exc_info=True)
+            user = {"id": user_id, "username": message.from_user.username, "first_name": message.from_user.first_name,
+                    "created_at": int(time.time()), "ref_code": "", "referred_by": None,
+                    "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
+                    "default_buy": None, "default_sell": None, "default_slippage": 10.0}
 
     # ONE wallet per user, forever: /start generates it the FIRST time only
     # (derived from WALLET_SEED when set — same key every time), and on every

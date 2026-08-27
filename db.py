@@ -258,6 +258,36 @@ async def _migrate_users_columns(con_like=None):
                             log.warning(f"migration: {table}.{col} DROP NOT NULL: {e}")
                 except Exception as e:
                     log.warning(f"migration: {table} introspection: {e}")
+            # coerce legacy column TYPES to what the code writes (e.g. an old
+            # VARCHAR(20) username/first_name is too short for Telegram names
+            # -> every write raised DataError). Safe widen-only casts.
+            try:
+                type_rows = await con.fetch(
+                    """
+                    SELECT column_name, data_type FROM information_schema.columns
+                    WHERE table_schema = current_schema() AND table_name = 'users'
+                    """)
+                for r in type_rows:
+                    col, dtype = r["column_name"], r["data_type"]
+                    if col not in USERS_COLUMNS:
+                        continue
+                    want = USERS_COLUMNS[col].split()[0]
+                    cast = None
+                    if want == "TEXT" and dtype in ("character varying", "character"):
+                        cast = "TEXT"
+                    elif want == "BIGINT" and dtype in ("smallint", "integer"):
+                        cast = "BIGINT"
+                    elif want == "DOUBLE PRECISION" and dtype in ("real", "numeric"):
+                        cast = "DOUBLE PRECISION"
+                    if cast:
+                        try:
+                            await con.execute(
+                                f'ALTER TABLE users ALTER COLUMN "{col}" TYPE {cast}')
+                            log.warning(f"migration: users.{col}: {dtype} -> {cast}")
+                        except Exception as e:
+                            log.warning(f"migration: users.{col} TYPE {cast}: {e}")
+            except Exception as e:
+                log.warning(f"migration: users type coercion: {e}")
     else:
         async with aiosqlite.connect(DB_PATH) as db:
             cur = await db.execute("PRAGMA table_info(users)")
@@ -295,6 +325,13 @@ async def _migrate_users_columns(con_like=None):
                     await db.commit()
             except Exception as e:
                 log.warning(f"migration: users NOT NULL rebuild: {e}")
+
+
+async def repair_schema():
+    """Idempotent schema repair (missing columns, legacy NOT NULLs, legacy
+    types). Safe to call at any time — used at startup and for self-healing
+    if a user write ever fails on a legacy constraint."""
+    await _migrate_users_columns()
 
 
 async def init_db():

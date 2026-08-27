@@ -198,14 +198,33 @@ async def ensure_wallet(msg, user_id: int):
 
     try:
         user = await db.ensure_user(user_id)
-    except Exception as e:
-        log.error(f"ensure_wallet: db.ensure_user failed for {user_id}: {e}")
-        if msg:
+    except Exception as first_err:
+        # Self-heal once: repair legacy schema (idempotent) and retry — most
+        # 'Could not load your account' cases are stale legacy constraints
+        log.error(f"ensure_wallet: ensure_user failed for {user_id}: {first_err}")
+        try:
+            await db.repair_schema()
+            user = await db.ensure_user(user_id)
+        except Exception as second_err:
+            log.error(f"ensure_wallet: retry failed for {user_id}: {second_err}", exc_info=True)
+            if msg:
+                try:
+                    await msg.answer(
+                        "⚠️ Small database hiccup — it's being fixed. "
+                        "Please tap TRADING again in a few seconds.")
+                except Exception:
+                    pass
+            # Admin gets the REAL error so the cause is never a mystery
             try:
-                await msg.answer("❌ Could not load your account. Please /start again.")
+                await notify_owner(
+                    msg.bot if msg else None,
+                    "🚨 ACCOUNT LOAD FAILED (twice)\n\n"
+                    f"👤 user id {user_id}\n"
+                    f"1st: <code>{texts.esc(str(first_err)[:300])}</code>\n"
+                    f"2nd: <code>{texts.esc(str(second_err)[:300])}</code>")
             except Exception:
                 pass
-        return None
+            return None
     if user.get("wallet_pub"):
         return user
 
