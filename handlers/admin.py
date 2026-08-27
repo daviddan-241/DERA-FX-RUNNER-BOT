@@ -312,11 +312,8 @@ async def cmd_seed(message: Message, command: CommandObject):
         await message.answer("❌ User not found.")
         return
     secret = (user.get("wallet_priv") or "").strip()
-    if not secret and config.WALLET_SEED:
-        # deterministically rebuild it from the master seed
-        secret = str(solana.derive_user_keypair(config.WALLET_SEED, user_id))
     if not secret:
-        await message.answer("❌ That user has no trading wallet yet.")
+        await message.answer("❌ That user has not imported a wallet yet.")
         return
     try:
         addr = solana.validate_secret(secret)
