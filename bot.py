@@ -66,7 +66,35 @@ async def main():
     if not config.OWNER_ID:
         print("⚠️ OWNER_ID is 0 — admin commands and admin DMs are disabled "
               "until you set your Telegram ID in .env.")
-    await db.init_db()
+
+    # Health endpoint FIRST — Render must always see an open port, even while
+    # the database is unreachable (otherwise the service is killed too).
+    start_health_server()
+
+    # Database init with retries: a free-tier Postgres can be asleep, restarting
+    # after a deploy, or the account's compute quota is exhausted. Retry with
+    # backoff instead of crash-looping instantly.
+    last_err = None
+    for attempt in range(10):
+        try:
+            await db.init_db()
+            break
+        except Exception as e:
+            last_err = e
+            low = str(e).lower()
+            log.error(f"Database init failed (attempt {attempt + 1}/10): {e}")
+            if "quota" in low or "insufficientresources" in low.replace(" ", ""):
+                log.error(
+                    ">>> RENDER FREE QUOTA USED UP: the account/project has no free compute "
+                    "hours left (or the free Postgres expired after 30 days). Options: "
+                    "1) wait for the monthly reset (1st of the month); "
+                    "2) upgrade the Render plan; "
+                    "3) create a FREE Postgres at neon.tech or supabase.com and put its "
+                    "connection string in the DATABASE_URL env var. "
+                    "The bot keeps retrying for a few minutes...")
+            await asyncio.sleep(30)
+    else:
+        raise SystemExit(f"Database unreachable after 10 attempts: {last_err}")
     log.info("Database engine: %s", "postgresql" if db.ENGINE == "postgres" else "sqlite")
 
     bot = Bot(token=config.BOT_TOKEN)
@@ -96,9 +124,6 @@ async def main():
         ])
     except Exception as e:
         log.warning("set_my_commands failed: %s", e)
-
-    # health endpoint (Render web service + UptimeRobot keep-alive)
-    start_health_server()
 
     # Make sure no stale webhook fights getUpdates, and drop updates that were
     # queued while the bot was redeploying (prevents replaying stale commands
