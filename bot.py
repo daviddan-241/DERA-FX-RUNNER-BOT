@@ -100,6 +100,16 @@ async def main():
     # health endpoint (Render web service + UptimeRobot keep-alive)
     start_health_server()
 
+    # Make sure no stale webhook fights getUpdates, and drop updates that were
+    # queued while the bot was redeploying (prevents replaying stale commands
+    # and the TelegramConflict 'terminated by other getUpdates request' noise
+    # during deploys).
+    try:
+        await bot.delete_webhook(drop_pending_updates=True)
+        log.info("Cleared webhook (if any) — polling mode ready")
+    except Exception as e:
+        log.warning(f"delete_webhook failed: {e}")
+
     # background job: expiry reminders + limit orders
     asyncio.create_task(scheduler_loop(bot))
 
